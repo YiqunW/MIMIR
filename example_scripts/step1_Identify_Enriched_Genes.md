@@ -21,7 +21,7 @@ the [URD package](https://github.com/farrellja/URD).
 
 ``` r
 suppressPackageStartupMessages(library(URD))
-object <- readRDS("../example_data/object_6_tree.rds")
+object <- readRDS("../../MIMIR large file/object_6_tree.rds")
 plotTree(object,label.segments = T)
 ```
 
@@ -218,62 +218,36 @@ noto.markers <- lapply(1:length(noto.nodes$group.ids), function(i) {
   message(paste0(Sys.time(), ": ", i))
   markers <- markersAUCPR(object, cells.1=noto.nodes$cells.in.nodes[[i]], cells.2=noto.nodes$cells.pt.matched[[i]], effect.size = 0.25, frac.must.express=0.1)
   thresh <- aucprThreshold(cells.1=noto.nodes$cells.in.nodes[[i]], cells.2=noto.nodes$cells.pt.matched[[i]], factor = 1, max.auc = Inf)
-  names(markers)[3:6] <- c("posFrac_noto", "posFrac_rest", "nTrans_noto", "nTrans_rest")
-  markers$AUCPRratio <- markers$AUCPR / thresh
+  names(markers)[4:7] <- c("posFrac_noto", "posFrac_rest", "nTrans_noto", "nTrans_rest")
   return(markers)
 })
-```
 
-    ## 2024-01-04 16:28:06: 1
-
-    ## 2024-01-04 16:32:57: 2
-
-    ## 2024-01-04 16:36:46: 3
-
-    ## 2024-01-04 16:39:59: 4
-
-    ## 2024-01-04 16:45:23: 5
-
-    ## 2024-01-04 16:51:42: 6
-
-    ## 2024-01-04 16:58:41: 7
-
-    ## 2024-01-04 17:04:58: 8
-
-``` r
 pcp.markers <- lapply(1:length(pcp.nodes$group.ids), function(i) {
   message(paste0(Sys.time(), ": ", i))
   markers <- markersAUCPR(object, cells.1=pcp.nodes$cells.in.nodes[[i]], cells.2=pcp.nodes$cells.pt.matched[[i]], effect.size = 0.25, frac.must.express=0.1)
   thresh <- aucprThreshold(cells.1=pcp.nodes$cells.in.nodes[[i]], cells.2=pcp.nodes$cells.pt.matched[[i]], factor = 1, max.auc = Inf)
-  names(markers)[3:6] <- c("posFrac_pcp", "posFrac_rest", "nTrans_pcp", "nTrans_rest")
-  markers$AUCPRratio <- markers$AUCPR / thresh
+  names(markers)[4:7] <- c("posFrac_pcp", "posFrac_rest", "nTrans_pcp", "nTrans_rest")
   return(markers)
 })
+
+saveRDS(list("noto"=noto.markers,"pcp"=pcp.markers), file='../example_results/markers3-12hpf.rds')
 ```
 
-    ## 2024-01-04 17:09:06: 1
-
-    ## 2024-01-04 17:13:58: 2
-
-    ## 2024-01-04 17:20:11: 3
-
-    ## 2024-01-04 17:25:59: 4
-
-    ## 2024-01-04 17:31:36: 5
-
-    ## 2024-01-04 17:36:58: 6
-
-    ## 2024-01-04 17:42:40: 7
+``` r
+markers=readRDS('../example_results/markers3-12hpf.rds')
+noto.markers=markers$noto
+pcp.markers=markers$pcp
+```
 
 ### Subset results to identify enriched genes with the following criteria:
 
 1.  AUCPR is 2x random expectation
-2.  Fold change is &gt;0.3
+2.  log fold change is &gt;0.3
 3.  Marker either passes in the last window or at least 2 windows.
 
 ``` r
 noto.markers.good <- lapply(noto.markers, function(x) {
-  x[x$AUCPRratio >= 2 & x$exp.fc > 0.3,]
+  x[x$AUCPR.ratio >= 2 & x$nTrans_noto-x$nTrans_rest > 0.3,]
 })
 noto.markers.2.fc3.2x <- names(which(table(unlist(lapply(noto.markers.good, rownames))) > 1))
 noto.markers.2.fc3.last <- rownames(noto.markers.good[[length(noto.markers.good)]])
@@ -281,7 +255,7 @@ noto.markers.2.fc3.2xorlast <- unique(c(noto.markers.2.fc3.2x, noto.markers.2.fc
 noto.genes <- noto.markers.2.fc3.2xorlast
 
 pcp.markers.good <- lapply(pcp.markers, function(x) {
-  x[x$AUCPRratio >= 2 & x$exp.fc > 0.3,]
+  x[x$AUCPR.ratio >= 2 & (x$nTrans_pcp-x$nTrans_rest) > 0.3,]
 })
 pcp.markers.2.fc3.2x <- names(which(table(unlist(lapply(pcp.markers.good, rownames))) > 1))
 pcp.markers.2.fc3.last <- rownames(pcp.markers.good[[length(pcp.markers.good)]])
@@ -298,7 +272,7 @@ and combined with the previous dataset to reconstruct extended axial
 mesoderm trajectories. \#\#\# Load data
 
 ``` r
-bushra.full <- readRDS("../example_data/BushraDataFullURD.rds") # sc-transcriptomes from 14-24hpf anterior embryos
+bushra.full <- readRDS("../../MIMIR large file/BushraDataFullURD.rds") # sc-transcriptomes from 14-24hpf anterior embryos
 axial.tree <- readRDS("../example_data/DraftTree.rds") # full trajectories for notochord and hatching gland using axial mesoderm data from both datasets
 ```
 
@@ -323,19 +297,10 @@ noto.markers <- lapply(stages.consider, function(stage) {
   cells.out <- setdiff(cellsInCluster(bushra.full, "hpf", stage), cellsAlongLineage(axial.tree, branch))
   markers <- markersAUCPR(bushra.full, cells.1=cells.in, cells.2=cells.out, effect.size = 0.25, frac.must.express=0.1)
   thresh <- aucprThreshold(cells.1=cells.in, cells.2=cells.out, factor = 1, max.auc = Inf)
-  names(markers)[3:6] <- c(paste0("posFrac_", branch.short), "posFrac_rest", paste0("nTrans_", branch.short), "nTrans_rest")
-  markers$AUCPRratio <- markers$AUCPR / thresh
+  names(markers)[4:7] <- c(paste0("posFrac_", branch.short), "posFrac_rest", paste0("nTrans_", branch.short), "nTrans_rest")
   return(markers)
 })
-```
 
-    ## 2024-01-04 22:21:57: 122024-01-04 22:21:57: 14
-
-    ## 2024-01-04 22:36:33: 162024-01-04 22:36:33: 18
-
-    ## 2024-01-04 22:49:12: 202024-01-04 22:49:12: 24
-
-``` r
 pcp.markers <- lapply(stages.consider, function(stage) {
   message(paste0(Sys.time(), ": ", stage))
   branch <- "Prechordal Plate"
@@ -344,17 +309,18 @@ pcp.markers <- lapply(stages.consider, function(stage) {
   cells.out <- setdiff(cellsInCluster(bushra.full, "hpf", stage), cellsAlongLineage(axial.tree, branch))
   markers <- markersAUCPR(bushra.full, cells.1=cells.in, cells.2=cells.out, effect.size = 0.25, frac.must.express=0.1)
   thresh <- aucprThreshold(cells.1=cells.in, cells.2=cells.out, factor = 1, max.auc = Inf)
-  names(markers)[3:6] <- c(paste0("posFrac_", branch.short), "posFrac_rest", paste0("nTrans_", branch.short), "nTrans_rest")
-  markers$AUCPRratio <- markers$AUCPR / thresh
+  names(markers)[4:7] <- c(paste0("posFrac_", branch.short), "posFrac_rest", paste0("nTrans_", branch.short), "nTrans_rest")
   return(markers)
 })
+
+saveRDS(list("noto"=noto.markers,"pcp"=pcp.markers), file='../example_results/markers14-24hpf.rds')
 ```
 
-    ## 2024-01-04 23:00:41: 122024-01-04 23:00:41: 14
-
-    ## 2024-01-04 23:12:09: 162024-01-04 23:12:09: 18
-
-    ## 2024-01-04 23:22:31: 202024-01-04 23:22:31: 24
+``` r
+markers=readRDS('../example_results/markers14-24hpf.rds')
+noto.markers=markers$noto
+pcp.markers=markers$pcp
+```
 
 ### Subset results to identify enriched genes
 
@@ -364,25 +330,18 @@ genes plotted on the developmental trajectories.*
 
 ``` r
 noto.markers.good <- lapply(noto.markers, function (nm) {
-  rownames(nm)[which(nm$AUCPRratio >= 7.5 & nm$exp.fc >= 0.3)]
+  rownames(nm)[which(nm$AUCPR.ratio >= 7.5 & (nm$nTrans_noto-nm$nTrans_rest) >= 0.3)]
 })
 pcp.markers.good <- lapply(pcp.markers, function (pm) {
-  rownames(pm)[which(pm$AUCPRratio >= 7.5 & pm$exp.fc >= 0.3)]
+  rownames(pm)[which(pm$AUCPR.ratio >= 7.5 & (pm$nTrans_pcp-pm$nTrans_rest) >= 0.3)]
 })
 
-noto.markers.good.1 <- names(which(table(unlist(noto.markers.good)) == 1))
 noto.markers.good.2 <- names(which(table(unlist(noto.markers.good)) > 1))
-noto.markers.good.1.new <- setdiff(noto.markers.good.1, noto.genes)
-noto.markers.good.2.new <- setdiff(noto.markers.good.2, noto.genes)
-noto.markers.good.1.old <- intersect(noto.markers.good.1, noto.genes)
-noto.markers.good.2.old <- intersect(noto.markers.good.2, noto.genes)
 
 pcp.markers.good.1 <- names(which(table(unlist(pcp.markers.good)) == 1))
 pcp.markers.good.2 <- names(which(table(unlist(pcp.markers.good)) > 1))
 pcp.markers.good.1.new <- setdiff(pcp.markers.good.1, pcp.genes)
 pcp.markers.good.2.new <- setdiff(pcp.markers.good.2, pcp.genes)
-pcp.markers.good.1.old <- intersect(pcp.markers.good.1, pcp.genes)
-pcp.markers.good.2.old <- intersect(pcp.markers.good.2, pcp.genes)
 
 pcp.markers.good.1.new.highAUCPR <- intersect(
   pcp.markers.good.1.new,
@@ -401,13 +360,13 @@ noto.genes <- sort(unique(c(noto.genes, noto.markers.good.2)))
 print(paste0("# notochord enriched genes: ",length(noto.genes)))
 ```
 
-    ## [1] "# notochord enriched genes: 0"
+    ## [1] "# notochord enriched genes: 806"
 
 ``` r
 print(paste0("# hatching gland enriched genes: ",length(pcp.genes)))
 ```
 
-    ## [1] "# hatching gland enriched genes: 0"
+    ## [1] "# hatching gland enriched genes: 802"
 
 ``` r
 write(pcp.genes, file="../example_results/genes.pcp.txt")
