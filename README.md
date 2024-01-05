@@ -11,7 +11,7 @@ MIMIR involves 5 major steps:
 4. Cluster enriched genes using combined expression and functional similarities
 5. Annotation and curate the resulting gene modules
 ### Step 1: Identify enriched genes during differentiation
-Genes that are more highly expressed in the cell type of interest compared to background cell types can be identified using appropriate differential expression tests. In our [example](), we segmented the notochord transcriptional trajectory into small time windows, and identified genes that show stronger expression in the notochord compared to the rest of the embryo in each time window using a precision-recall curve (AUCPR).
+Genes that are more highly expressed in the cell type of interest compared to background cell types can be identified using appropriate differential expression tests. In our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step1_Identify_Enriched_Genes.md), we segmented the notochord transcriptional trajectory into small time windows, and identified genes that show stronger expression in the notochord compared to the rest of the embryo in each time window using a precision-recall curve (AUCPR).
 ### Step 2: Calculate expression similarities between enriched genes
 Expression similarities between enriched genes are calculated by comparing their sc-expression patterns during differentiation. We tested a range of expression distance metrics in our [example](), including Euclidean distance, (soft) cosine distance, Canberra distance, and Jensen-Shannon divergence. 
 ### Step 3: Calculate functional similarities between enriched genes
