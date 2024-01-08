@@ -1,5 +1,5 @@
 ---
-title: "Step1:Define Enriched Genes in Cell Types of Interest"
+title: "Step1: Define Enriched Genes in Cell Types of Interest"
 author: "Yiqun Wang"
 output: github_document
 code_folding: show

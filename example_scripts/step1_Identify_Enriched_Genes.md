@@ -1,4 +1,4 @@
-Step1:Define Enriched Genes in Cell Types of Interest
+Step1: Define Enriched Genes in Cell Types of Interest
 ================
 Yiqun Wang
 
