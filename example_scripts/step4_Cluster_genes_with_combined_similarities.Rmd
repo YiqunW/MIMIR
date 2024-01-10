@@ -1,0 +1,90 @@
+---
+title: 'Step4: Cluster with combined similarities'
+author: "Yiqun Wang"
+output: github_document
+---
+In this example, we will cluster the notochord-enriched genes (identified in Step1) based on their expression similarities (calculated in Step2) as well as their functional similarities (calculated in Step3). 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load previously calculated expression and functional similarities
+```{r}
+## Expression similarity scores:
+exp_sim = readRDS("../example_results/exp_similarities.rds")
+exp_sim=exp_sim$noto
+
+## Functional similarity scores:
+str_scores = readRDS("../example_results/STRING_score_matrices.rds")
+GO_cc = readRDS("../example_results/SemSim_Sep2021_GO_CC.rds")
+GO_mf = readRDS("../example_results/SemSim_Sep2021_GO_MF.rds")
+GO_bp = readRDS("../example_results/SemSim_Sep2021_GO_BP.rds")
+Reactome = readRDS("../example_results/SemSim_Sep2021_Reactome.rds")
+Interpro = readRDS("../example_results/SemSim_Sep2021_Interpro.rds")
+```
+
+## Combine expression and functional similarities
+### Select which metrics in expression and functional similarities to use
+```{r}
+## Expression similarities to choose from:
+print(dimnames(exp_sim)[[3]])
+
+## Organize functional similarities into a 3D array too
+anno.channels=c("string", "string_noDB", "string_ExpTxt", "GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro")
+noto.genes = dimnames(exp_sim)[[1]]
+anno.sim.noto=array(0,dim=c(length(noto.genes),length(noto.genes),length(anno.channels)),
+                        dimnames = list(noto.genes, noto.genes, anno.channels))
+### fill in with string scores
+comm.genes=intersect(noto.genes,rownames(str_scores$combined_score))
+anno.sim.noto[comm.genes,comm.genes,"string"]=str_scores$combined_score[comm.genes,comm.genes]
+
+comm.genes=intersect(noto.genes,rownames(str_scores$combined_noDB))
+anno.sim.noto[comm.genes,comm.genes,"string_noDB"]=str_scores$combined_noDB[comm.genes,comm.genes]
+
+comm.genes=intersect(noto.genes,rownames(str_scores$combined_exp_txt))
+anno.sim.noto[comm.genes,comm.genes,"string_ExpTxt"]=str_scores$combined_exp_txt[comm.genes,comm.genes]
+
+### Fill in with go, reactome, and interpro scores
+### To make scores calculated from different databases more comparable, we will adjust the scores with a "prior". Each similarity matrix includes the union of genes highly expressed in each cell type in the embryo. This provides a global gene set for estimating similarities between random gene pairs. For each similarity matrix, we calculate the mean similarity across all genes and subtract this value from the matrix. The STRING dataset is already prior adjusted so didn't need to go through this procedure. 
+subtract_mean <- function(anno.matrix, prt_mean=T){
+  bg.ave=mean(anno.matrix[upper.tri(anno.matrix)])
+  anno.matrix=anno.matrix-bg.ave
+  anno.matrix=anno.matrix*(anno.matrix>0)
+  print(paste0("Mean value to subtract = ", bg.ave))
+  return(anno.matrix)
+}
+
+for(anno in c("GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro")){
+  print(anno)
+  anno_sim=get(anno)
+  matrix_add=subtract_mean(anno_sim$similarity)
+  comm.genes=intersect(noto.genes,rownames(matrix_add))
+  anno.sim.noto[comm.genes,comm.genes, anno]=matrix_add[comm.genes,comm.genes]
+}
+```
+
+### 1. Expression OR function: S = 1-(1-Se)(1-Sa). Combined score will be high if either expression or functional similarity is high. For instance, a high expression similarity combined with a low functional similarity will still give a high score. 
+```{r}
+
+```
+
+### 2. Expression AND function: S = Se*Sa. Combined score will be high if both expression and functional similarities are high.
+```{r}
+
+```
+
+### 3. Expression + function: S = Se + Sa.
+```{r}
+
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

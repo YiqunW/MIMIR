@@ -1,6 +1,8 @@
 require(AnnotationDbi)
 require(GOSemSim)
 require(GO.db)
+require(abind)
+
 computeIC.anno <- function(goAnno, cat=NULL,Offsprings=NULL) {
   ## goAnno, dataframe with columns gene, id, evidence, category
   if(!is.null(cat)){
@@ -334,4 +336,99 @@ str_ppi_2tbl <- function(str_ppi, thres, values="combined_score",g1.col="protein
     str_ppi.tbl.max=str_ppi.tbl.max[-all.zeros,-all.zeros]
   }
   return(str_ppi.tbl.max)
+}
+
+subtract_mean <- function(anno.matrix, prt_mean=F, prior=NULL){
+  if(is.null(prior)){
+    bg.ave=mean(anno.matrix[upper.tri(anno.matrix)])
+  }else{
+    bg.ave=prior
+  }
+  anno.matrix=anno.matrix-bg.ave
+  anno.matrix=anno.matrix*(anno.matrix>0)
+  if(prt_mean){print(paste0("Mean (prior) value to subtract = ", bg.ave))}
+  return(anno.matrix)
+}
+
+stack_func_sim <- function(simM_list, genes_use=NULL, adj_prior=F, add_to=NULL){
+  if(is.null(genes_use)&is.null(add_to)){
+    stop("Need to provide either genes_use as a vector of genes or add_to as a similarity matrix")
+  }
+  if(is.null(genes_use)){
+    genes_use=dimnames(add_to)[[1]]
+  }else{
+    if(!is.null(add_to)){
+      if(setequal(genes_use, dimnames(add_to)[[1]])){
+        genes_use=dimnames(add_to)[[1]]
+      }else{
+        if(length(intersect(genes_use, dimnames(add_to)[[1]]))>0){
+          genes_use=dimnames(add_to)[[1]]
+          print(paste0("Only ", length(intersect(genes_use, dimnames(add_to)[[1]])))," genes overalp between genes_use and genes in the add_to matrix. Ignoring gene_use and using genes in the add_to matrix.")
+        }else{
+          stop("There's no overlap between genes_use and genes in the add_to matrix. Consider setting one of them to NULL")
+        }
+      }
+    }
+  }
+  anno_names=names(simM_list)
+  anno3d=array(0,dim=c(length(genes_use),length(genes_use),length(anno_names)),
+               dimnames = list(genes_use, genes_use, anno_names))
+  for(anno in anno_names){
+    simM=simM_list[[anno]]
+    if(is.null(adj_prior) || adj_prior){
+      if(is.numeric(adj_prior)){
+        simM=subtract_mean(simM, prior=adj_prior)
+      }else{
+        simM=subtract_mean(simM, prior=NULL, prt_mean = T)
+      }
+    }
+    comm.genes=intersect(genes_use,rownames(simM))
+    anno3d[comm.genes, comm.genes, anno]=simM[comm.genes, comm.genes]
+  }
+  if(is.null(add_to)){
+    return(anno3d)
+  }else{
+    return(abind(add_to, anno3d))
+  }
+}
+
+combine_anno_scores <- function(all_links, channel.use, prior=NULL){
+  if(length(channel.use)==1){
+    if(is.null(prior)){
+      return(all_links[,,channel.use])
+    }else{
+      adj.M=all_links[,,channel.use]-prior
+      return(adj.M*(adj.M>0))
+    }
+  }else{
+    if(is.null(prior)){
+      return(apply(all_links[,,channel.use],c(1,2),function(x) 1-prod(1-x)))
+    }else{
+      adj.M=all_links[,,channel.use]-prior
+      adj.M=adj.M*(adj.M>0)
+      return(apply(adj.M,c(1,2),function(x) 1-prod(1-x)))
+    }
+  }
+}
+
+combine_anno_scores <- function(all_links, channel.use, prior=NULL){
+  ## check if input similarities scores are all between 0 and 1
+  minmax=range(all_links[,,channel.use])
+  if(minmax[1]<0 | minmax[2]>1){stop("Abort. Similarity score range out of bound [0,1].")}
+  if(length(channel.use)==1){
+    if(is.null(prior)){
+      return(all_links[,,channel.use])
+    }else{
+      adj.M=all_links[,,channel.use]-prior
+      return(adj.M*(adj.M>0))
+    }
+  }else{
+    if(is.null(prior)){
+      return(apply(all_links[,,channel.use],c(1,2),function(x) 1-prod(1-x)))
+    }else{
+      adj.M=all_links[,,channel.use]-prior
+      adj.M=adj.M*(adj.M>0)
+      return(apply(adj.M,c(1,2),function(x) 1-prod(1-x)))
+    }
+  }
 }

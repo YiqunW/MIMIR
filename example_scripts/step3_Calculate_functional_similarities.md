@@ -72,6 +72,8 @@ source("../functions/functional_similarity_calculations.R")
 
     ## Loading required package: GO.db
 
+    ## Loading required package: abind
+
 ## Read in enriched genes and background genes
 
 ``` r
@@ -396,10 +398,17 @@ for(i in 1:(length(genes)-1)){
 
 ``` r
 ## diagonal values are all 0 right now
-all.go=list("similarity"=go.axial.sim, "IC"=go.ic, "annotation"=goAnno)
 all.reac=list("similarity"=reac.axial.sim, "IC"=reac.ic.h, "annotation"=reacAnno, "parent_child"=reac.p2c)
 all.interp=list("similarity"=interp.axial.sim, "IC"=interp.ic, "annotation"=interpAnno, "parent_child"=interp.p2c)
-saveRDS(list("GO"=all.go,"Reactome"=all.reac,"Interprot"=all.interp),"../example_results/SemanticSimilarities_Sep2021.rds")
+go.cc=list("similarity"=go.axial.sim$CC, "IC"=go.ic$CC, "annotation"=goAnno[goAnno$category=="CC",])
+go.bp=list("similarity"=go.axial.sim$BP, "IC"=go.ic$BP, "annotation"=goAnno[goAnno$category=="BP",])
+go.mf=list("similarity"=go.axial.sim$MF, "IC"=go.ic$MF, "annotation"=goAnno[goAnno$category=="MF",])
+
+saveRDS(all.interp,"../example_results/SemSim_Sep2021_Interpro.rds",compress = "xz")
+saveRDS(all.reac,"../example_results/SemSim_Sep2021_Reactome.rds",compress = "xz")
+saveRDS(go.cc,"../example_results/SemSim_Sep2021_GO_CC.rds",compress = "xz")
+saveRDS(go.bp,"../example_results/SemSim_Sep2021_GO_BP.rds",compress = "xz")
+saveRDS(go.mf,"../example_results/SemSim_Sep2021_GO_MF.rds",compress = "xz")
 ```
 
 ## Extract functional similarities from STRING database
@@ -481,4 +490,127 @@ for(chan in setdiff(colnames(str_combined),c("gene1","gene2"))){
 
 ``` r
 saveRDS(str_score.matrices, "../example_results/STRING_score_matrices.rds")
+```
+
+## Try some combinations of functional similarity scores calculated from different databases
+
+For instance, GO, Reactome, Interpro derived similarities can be
+combined, which could be further combined with STRING scores
+(recalculated without “database” evidence).
+
+### Read in the functional similarity scores calculated from individual databases
+
+``` r
+str_scores = readRDS("../example_results/STRING_score_matrices.rds")
+GO_cc = readRDS("../example_results/SemSim_Sep2021_GO_CC.rds")
+GO_mf = readRDS("../example_results/SemSim_Sep2021_GO_MF.rds")
+GO_bp = readRDS("../example_results/SemSim_Sep2021_GO_BP.rds")
+Reactome = readRDS("../example_results/SemSim_Sep2021_Reactome.rds")
+Interpro = readRDS("../example_results/SemSim_Sep2021_Interpro.rds")
+```
+
+### Organize functional similarities into a 3D array to facilitate downstream processing
+
+1.  To make scores calculated from different databases more comparable,
+    we will adjust the scores from GO, Reactome, and Interpro with a
+    “prior”, which is the expected similarity for any random pairs of
+    genes. We included the union of genes highly expressed in each cell
+    type in the embryo during our similarity calculations. This provides
+    a global gene set for estimating similarities between random gene
+    pairs. We will calculate the mean similarity across all genes and
+    subtract this value from the similarity matrix. The STRING dataset
+    is already prior adjusted so didn’t need to go through this
+    procedure.
+2.  For this example, we will keep only the notochord enriched genes in
+    the final similarity matrices
+
+``` r
+anno.sim.noto=stack_func_sim(list("STRING"=str_scores$combined_score, 
+                                  "STRING_noDB"=str_scores$combined_noDB, 
+                                  "STRING_ExpTxt"=str_scores$combined_exp_txt), 
+                             genes_use=noto.genes)
+
+anno.sim.noto=stack_func_sim(list("GO_cc"=GO_cc$similarity, "GO_bp"=GO_bp$similarity, "GO_mf"=GO_mf$similarity, 
+                                  "Reactome"=Reactome$similarity, "Interpro"=Interpro$similarity), 
+                             adj_prior=T, add_to=anno.sim.noto)
+```
+
+    ## [1] "Mean (prior) value to subtract = 0.44392323325212"
+    ## [1] "Mean (prior) value to subtract = 0.159372289484586"
+    ## [1] "Mean (prior) value to subtract = 0.257583210247982"
+    ## [1] "Mean (prior) value to subtract = 0.0182937903553978"
+    ## [1] "Mean (prior) value to subtract = 0.0126200897377966"
+
+``` r
+print(dim(anno.sim.noto))
+```
+
+    ## [1] 806 806   8
+
+``` r
+print(dimnames(anno.sim.noto)[[3]])
+```
+
+    ## [1] "STRING"        "STRING_noDB"   "STRING_ExpTxt" "GO_cc"        
+    ## [5] "GO_bp"         "GO_mf"         "Reactome"      "Interpro"
+
+``` r
+print(range(anno.sim.noto))
+```
+
+    ## [1] 0.0000000 0.9999386
+
+### Decide on which databases to combine
+
+``` r
+anno_combine=list("string_noDB+GO+Reactome+Interpro"=c("STRING_noDB", "GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro"),
+                  "string_ExpTxt+GO+Reactome+Interpro"=c("STRING_ExpTxt", "GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro"), 
+                  "GO+Reactome+Interpro"=c("GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro"),
+                  "GO"=c("GO_cc", "GO_bp", "GO_mf"))
+```
+
+### Combine similarities derived from different databases
+
+``` r
+genes=dimnames(anno.sim.noto)[[1]]
+combined_anno.noto=array(0,dim=c(length(genes),length(genes),length(anno_combine)),
+               dimnames = list(genes, genes, names(anno_combine)))
+for(combi in names(anno_combine)){
+  combined_anno.noto[,,combi]=combine_anno_scores(anno.sim.noto, anno_combine[[combi]])
+}
+print(dim(combined_anno.noto))
+```
+
+    ## [1] 806 806   4
+
+``` r
+print(dimnames(combined_anno.noto)[[3]])
+```
+
+    ## [1] "string_noDB+GO+Reactome+Interpro"   "string_ExpTxt+GO+Reactome+Interpro"
+    ## [3] "GO+Reactome+Interpro"               "GO"
+
+``` r
+print(range(combined_anno.noto))
+```
+
+    ## [1] 0.0000000 0.9999999
+
+### Save the combined annotation scores for notochord genes
+
+``` r
+## include also the adjusted single database similarity matrices
+all_anno.noto=abind(combined_anno.noto, anno.sim.noto)
+print(dimnames(all_anno.noto)[[3]])
+```
+
+    ##  [1] "string_noDB+GO+Reactome+Interpro"   "string_ExpTxt+GO+Reactome+Interpro"
+    ##  [3] "GO+Reactome+Interpro"               "GO"                                
+    ##  [5] "STRING"                             "STRING_noDB"                       
+    ##  [7] "STRING_ExpTxt"                      "GO_cc"                             
+    ##  [9] "GO_bp"                              "GO_mf"                             
+    ## [11] "Reactome"                           "Interpro"
+
+``` r
+saveRDS(all_anno.noto, "../example_results/notochord_functional_similarities.RDS")
 ```
