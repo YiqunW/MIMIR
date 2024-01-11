@@ -564,6 +564,7 @@ print(range(anno.sim.noto))
 
 ``` r
 anno_combine=list("string_noDB+GO+Reactome+Interpro"=c("STRING_noDB", "GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro"),
+                  "string_noDB+GO_noCC+Reactome+Interpro"=c("STRING_noDB", "GO_bp", "GO_mf", "Reactome", "Interpro"),
                   "string_ExpTxt+GO+Reactome+Interpro"=c("STRING_ExpTxt", "GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro"), 
                   "GO+Reactome+Interpro"=c("GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro"),
                   "GO"=c("GO_cc", "GO_bp", "GO_mf"))
@@ -581,14 +582,17 @@ for(combi in names(anno_combine)){
 print(dim(combined_anno.noto))
 ```
 
-    ## [1] 806 806   4
+    ## [1] 806 806   5
 
 ``` r
 print(dimnames(combined_anno.noto)[[3]])
 ```
 
-    ## [1] "string_noDB+GO+Reactome+Interpro"   "string_ExpTxt+GO+Reactome+Interpro"
-    ## [3] "GO+Reactome+Interpro"               "GO"
+    ## [1] "string_noDB+GO+Reactome+Interpro"     
+    ## [2] "string_noDB+GO_noCC+Reactome+Interpro"
+    ## [3] "string_ExpTxt+GO+Reactome+Interpro"   
+    ## [4] "GO+Reactome+Interpro"                 
+    ## [5] "GO"
 
 ``` r
 print(range(combined_anno.noto))
@@ -604,12 +608,19 @@ all_anno.noto=abind(combined_anno.noto, anno.sim.noto)
 print(dimnames(all_anno.noto)[[3]])
 ```
 
-    ##  [1] "string_noDB+GO+Reactome+Interpro"   "string_ExpTxt+GO+Reactome+Interpro"
-    ##  [3] "GO+Reactome+Interpro"               "GO"                                
-    ##  [5] "STRING"                             "STRING_noDB"                       
-    ##  [7] "STRING_ExpTxt"                      "GO_cc"                             
-    ##  [9] "GO_bp"                              "GO_mf"                             
-    ## [11] "Reactome"                           "Interpro"
+    ##  [1] "string_noDB+GO+Reactome+Interpro"     
+    ##  [2] "string_noDB+GO_noCC+Reactome+Interpro"
+    ##  [3] "string_ExpTxt+GO+Reactome+Interpro"   
+    ##  [4] "GO+Reactome+Interpro"                 
+    ##  [5] "GO"                                   
+    ##  [6] "STRING"                               
+    ##  [7] "STRING_noDB"                          
+    ##  [8] "STRING_ExpTxt"                        
+    ##  [9] "GO_cc"                                
+    ## [10] "GO_bp"                                
+    ## [11] "GO_mf"                                
+    ## [12] "Reactome"                             
+    ## [13] "Interpro"
 
 ``` r
 saveRDS(all_anno.noto, "../example_results/notochord_functional_similarities.RDS")

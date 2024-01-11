@@ -320,6 +320,7 @@ print(range(anno.sim.noto))
 ### Decide on which databases to combine
 ```{r}
 anno_combine=list("string_noDB+GO+Reactome+Interpro"=c("STRING_noDB", "GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro"),
+                  "string_noDB+GO_noCC+Reactome+Interpro"=c("STRING_noDB", "GO_bp", "GO_mf", "Reactome", "Interpro"),
                   "string_ExpTxt+GO+Reactome+Interpro"=c("STRING_ExpTxt", "GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro"), 
                   "GO+Reactome+Interpro"=c("GO_cc", "GO_bp", "GO_mf", "Reactome", "Interpro"),
                   "GO"=c("GO_cc", "GO_bp", "GO_mf"))

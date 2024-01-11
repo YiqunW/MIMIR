@@ -392,24 +392,6 @@ stack_func_sim <- function(simM_list, genes_use=NULL, adj_prior=F, add_to=NULL){
   }
 }
 
-combine_anno_scores <- function(all_links, channel.use, prior=NULL){
-  if(length(channel.use)==1){
-    if(is.null(prior)){
-      return(all_links[,,channel.use])
-    }else{
-      adj.M=all_links[,,channel.use]-prior
-      return(adj.M*(adj.M>0))
-    }
-  }else{
-    if(is.null(prior)){
-      return(apply(all_links[,,channel.use],c(1,2),function(x) 1-prod(1-x)))
-    }else{
-      adj.M=all_links[,,channel.use]-prior
-      adj.M=adj.M*(adj.M>0)
-      return(apply(adj.M,c(1,2),function(x) 1-prod(1-x)))
-    }
-  }
-}
 
 combine_anno_scores <- function(all_links, channel.use, prior=NULL){
   ## check if input similarities scores are all between 0 and 1
