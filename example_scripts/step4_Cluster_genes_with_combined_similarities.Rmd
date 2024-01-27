@@ -35,7 +35,7 @@ anno_use = c("string_noDB+GO+Reactome+Interpro", "string_noDB+GO_noCC+Reactome+I
 ### 1. Expression OR function: S = 1-(1-Se)(1-Sa) 
 Integrated score will be high if either expression or functional similarity is high. For instance, a high expression similarity combined with a low functional similarity will still give a high score. 
 ```{r}
-simOR=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="OR",minmax=c(0.05,1))
+simOR=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="OR",add=0, maxscale = 1)
 ## simOR is a 3d array
 dim(simOR)
 dimnames(simOR)[[3]]
@@ -45,7 +45,7 @@ saveRDS(simOR,"../example_results/notochord_OR_integrated_sim.rds", compress = "
 ### 2. Expression AND function: S = Se*Sa
 Integrated score will be high if both expression and functional similarities are high.
 ```{r}
-simAND=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="AND",minmax=c(0.05,1))
+simAND=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="AND",add=0.05, maxscale = 1)
 ## simOR is a 3d array
 dimnames(simAND)[[3]]
 saveRDS(simAND,"../example_results/notochord_AND_integrated_sim.rds", compress = "xz")
@@ -53,7 +53,7 @@ saveRDS(simAND,"../example_results/notochord_AND_integrated_sim.rds", compress =
 
 ### 3. Expression + function: S = Se + Sa
 ```{r}
-simPlus=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="+",minmax=c(0.05,1))
+simPlus=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="+",add=0, maxscale = 1)
 ## simOR is a 3d array
 dimnames(simPlus)[[3]]
 ```
@@ -65,42 +65,48 @@ clus_noto=list()
 
 ## Try 3 different clustering methods: louvain, infomap, and leiden. Leiden needs additional resolution and partition method parameters
 ## try a few resolution parameters for leiden
-res=c(2,2.5,3,3.5,4,5)
+res=c(2,2.5,3,3.5,4,5,7)
 
 ## Cluster
-## Each for loop will loop through scores and clustering methods, which can take a long time. Clustering with different scores and clustering methods can be parallelized to speed up the calculation.
+## Clustering with different scores and clustering methods can be parallelized to speed up the calculation.
 ### 1. with OR integrated scores. 
 for(s in dimnames(simOR)[[3]]){
   print(s)
-  clus_noto[[s]]=igraph_cls(simOR[,,s], method=c("louvain","infomap","leiden"),leiden_res=res,
+  sim_use=trim_adj(simOR[,,s], n_kp=120) # trim the adjacency matrix such that each gene keeps only their top 80 connections. This will speed up clustering and help discretize the overly connected gene network
+  clus_noto[[s]]=igraph_cls(sim_use, method=c("louvain","infomap","leiden"),leiden_res=res, 
                                 leiden_iter = 50, leiden_par=c("RBConfigurationVertexPartition"), seed=1)
 }
 
 ### 2. with AND integrated scores. 
 for(s in dimnames(simAND)[[3]]){
   print(s)
-  clus_noto[[s]]=igraph_cls(simAND[,,s], method=c("louvain","infomap","leiden"),leiden_res=res,
+  sim_use=trim_adj(simAND[,,s], n_kp=120)
+  clus_noto[[s]]=igraph_cls(sim_use, method=c("louvain","infomap","leiden"),leiden_res=res,
                                 leiden_iter = 50, leiden_par=c("RBConfigurationVertexPartition"), seed=1)
 }
 
 ### 3. with + integrated scores
 for(s in dimnames(simPlus)[[3]]){
   print(s)
-  clus_noto[[s]]=igraph_cls(simPlus[,,s], method=c("louvain","infomap","leiden"),leiden_res=res,
+  sim_use=trim_adj(simPlus[,,s], n_kp = 120)
+  clus_noto[[s]]=igraph_cls(sim_use, method=c("louvain","infomap","leiden"),leiden_res=res,
                                 leiden_iter = 50, leiden_par=c("RBConfigurationVertexPartition"), seed=1)
 }
 ```
+
 ### Cluster with only expression or only functional similarities too for comparison
 ```{r, eval=F}
 for(s in dimnames(exp_sim)[[3]]){
   print(s)
-  clus_noto[[s]]=igraph_cls(exp_sim[,,s], method=c("louvain","infomap","leiden"),leiden_res=res,
+  sim_use=trim_adj(exp_sim[,,s], n_kp = 120)
+  clus_noto[[s]]=igraph_cls(sim_use, method=c("louvain","infomap","leiden"),leiden_res=res,
                                 leiden_iter = 50, leiden_par=c("RBConfigurationVertexPartition"), seed=1)
 }
 
 for(s in dimnames(anno_sim)[[3]]){
   print(s)
-  clus_noto[[s]]=igraph_cls(anno_sim[,,s], method=c("louvain","infomap","leiden"),leiden_res=res,
+  sim_use=trim_adj(anno_sim[,,s], n_kp = 120)
+  clus_noto[[s]]=igraph_cls(sim_use, method=c("louvain","infomap","leiden"),leiden_res=res,
                                 leiden_iter = 50, leiden_par=c("RBConfigurationVertexPartition"), seed=1)
 }
 ```
@@ -115,4 +121,3 @@ saveRDS(clus_noto, "../example_results/notochord_all_clusters.rds")
 clus_noto=readRDS("../example_results/notochord_all_clusters.rds")
 head(clus_noto$`GO:OR:soft_cos`) ## each matrix contains cluster ids
 ```
-

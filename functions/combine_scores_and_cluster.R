@@ -1,7 +1,7 @@
 require(abind)
 require(igraph)
 require(leiden)
-integrate_exp_anno <- function(expM, annoM, method=c("AND","OR","+"), genes=c("inner","outer"), minmax=NULL){
+integrate_exp_anno <- function(expM, annoM, method=c("AND","OR","+"), genes=c("inner","outer"), add=0, maxscale=NULL){
   ## Test if both matrices contain the same genes
   if(!setequal(rownames(expM), rownames(annoM))){
     print("Genes in the two matrices don't match")
@@ -23,28 +23,38 @@ integrate_exp_anno <- function(expM, annoM, method=c("AND","OR","+"), genes=c("i
     annoM=annoM[rownames(expM),colnames(expM)]
   }
   ## Can scale the similarity matrices before integration
-  if(!is.null(minmax)){
-    if(minmax[1]<0 | minmax[2]>1 | minmax[1]>=minmax[2]){
-      stop("minmax = c(min, max), min < max, both need to be within the bounds of [0,1].")
+  if(is.null(maxscale)){
+    max_exp=max(expM)
+    max_anno=max(annoM)
+    if(add<0 | max(c(max_exp, max_anno))>1){
+      stop("Make sure 0 <= add < max similarities in expM and annM <= 1.")
+    }
+  }
+  if(!is.null(maxscale)){
+    if(add<0 | maxscale>1 | add>=maxscale){
+      stop("Make sure 0 <= add < maxscale <=1.")
     }else{
-      expM=(expM/max(expM))*(minmax[2]-minmax[1])+minmax[1]
-      annoM=(annoM/max(annoM))*(minmax[2]-minmax[1])+minmax[1]
+      expM=(expM/max(expM))*(maxscale-add)+add
+      annoM=(annoM/max(annoM))*(maxscale-add)+add
     }
   }
   if(method=="AND"){
     simM=expM*annoM
+    simM=simM-add*add
     return(simM)
   }else if(method=="OR"){
     simM=1-(1-expM)*(1-annoM)
+    simM=simM-(1-(1-add)^2)
   }else if(method=="+"){
-    simM=expM+annoM
+    simM=(expM+annoM)/2
+    simM=simM-add
   }else{stop("method needs to be 'AND','OR', or '+'")}
   ## force diagonal to 1
   diag(simM) <- 1
   return(simM)
 }
 
-integrate_all_exp_anno <- function(exp_sim, anno_sim, exp_use=NULL, anno_use=NULL, method="AND", minmax=c(0.05, 1), combine_genes="outer", prt_process=F){
+integrate_all_exp_anno <- function(exp_sim, anno_sim, exp_use=NULL, anno_use=NULL, method="AND", add=0, maxscale=NULL, combine_genes="outer", prt_process=F){
   if(is.null(exp_use)){
     exp_use=dimnames(exp_sim[[3]])
   }
@@ -62,15 +72,30 @@ integrate_all_exp_anno <- function(exp_sim, anno_sim, exp_use=NULL, anno_use=NUL
       if(is.null(sim_integ)){
         sim_integ=array(0,dim=c(length(genes.use),length(genes.use),1),
                         dimnames = list(genes.use, genes.use, score_name))
-        simM=integrate_exp_anno(expM, annoM, method=method, minmax=minmax, genes=combine_genes)
+        simM=integrate_exp_anno(expM, annoM, method=method, add=add, maxscale=maxscale, genes=combine_genes)
         sim_integ[,,score_name]=simM[genes.use,genes.use]
       }else{
-        simM=integrate_exp_anno(expM, annoM, method=method, minmax=minmax, genes=combine_genes)
+        simM=integrate_exp_anno(expM, annoM, method=method,add=add, maxscale=maxscale,genes=combine_genes)
         sim_integ=abind(sim_integ, simM[genes.use,genes.use], new.names = list(genes.use,genes.use,c(dimnames(sim_integ)[[3]], score_name)))
       }
     }
   }
   return(sim_integ)
+}
+
+trim_adj <- function(adj_tbl, pct_kp, n_kp=NULL, mode="and"){
+  if(is.null(n_kp)){
+    n_kp=dim(adj_tbl)[1]*pct_kp+1
+  }
+  a1=t(apply(adj_tbl,1,function(x){x>=(sort(x,decreasing = T)[n_kp])}))
+  a2=apply(adj_tbl,2,function(x){x>=(sort(x,decreasing = T)[n_kp])})
+  if(mode=="and"){
+    return((a1*a2)*adj_tbl)
+  }else if(mode=="or"){
+    return((a1|a2)*adj_tbl)
+  }else{
+    print("error: mode must be 'and' or 'or'")
+  }
 }
 
 igraph_cls <- function(adj_tbl, method=NULL,leiden_res=8, leiden_iter=-1, leiden_par="RBConfigurationVertexPartition",...){

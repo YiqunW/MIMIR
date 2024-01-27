@@ -85,7 +85,7 @@ similarity is high. For instance, a high expression similarity combined
 with a low functional similarity will still give a high score.
 
 ``` r
-simOR=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="OR",minmax=c(0.05,1))
+simOR=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="OR",add=0, maxscale = 1)
 ## simOR is a 3d array
 dim(simOR)
 ```
@@ -135,7 +135,7 @@ Integrated score will be high if both expression and functional
 similarities are high.
 
 ``` r
-simAND=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="AND",minmax=c(0.05,1))
+simAND=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="AND",add=0.05, maxscale = 1)
 ## simOR is a 3d array
 dimnames(simAND)[[3]]
 ```
@@ -176,7 +176,7 @@ saveRDS(simAND,"../example_results/notochord_AND_integrated_sim.rds", compress =
 ### 3. Expression + function: S = Se + Sa
 
 ``` r
-simPlus=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="+",minmax=c(0.05,1))
+simPlus=integrate_all_exp_anno(exp_sim, anno_sim, exp_use=exp_use, anno_use=anno_use, method="+",add=0, maxscale = 1)
 ## simOR is a 3d array
 dimnames(simPlus)[[3]]
 ```
@@ -225,28 +225,31 @@ clus_noto=list()
 
 ## Try 3 different clustering methods: louvain, infomap, and leiden. Leiden needs additional resolution and partition method parameters
 ## try a few resolution parameters for leiden
-res=c(2,2.5,3,3.5,4,5)
+res=c(2,2.5,3,3.5,4,5,7)
 
 ## Cluster
-## Each for loop will loop through scores and clustering methods, which can take a long time. Clustering with different scores and clustering methods can be parallelized to speed up the calculation.
+## Clustering with different scores and clustering methods can be parallelized to speed up the calculation.
 ### 1. with OR integrated scores. 
 for(s in dimnames(simOR)[[3]]){
   print(s)
-  clus_noto[[s]]=igraph_cls(simOR[,,s], method=c("louvain","infomap","leiden"),leiden_res=res,
+  sim_use=trim_adj(simOR[,,s], n_kp=120) # trim the adjacency matrix such that each gene keeps only their top 80 connections. This will speed up clustering and help discretize the overly connected gene network
+  clus_noto[[s]]=igraph_cls(sim_use, method=c("louvain","infomap","leiden"),leiden_res=res, 
                                 leiden_iter = 50, leiden_par=c("RBConfigurationVertexPartition"), seed=1)
 }
 
 ### 2. with AND integrated scores. 
 for(s in dimnames(simAND)[[3]]){
   print(s)
-  clus_noto[[s]]=igraph_cls(simAND[,,s], method=c("louvain","infomap","leiden"),leiden_res=res,
+  sim_use=trim_adj(simAND[,,s], n_kp=120)
+  clus_noto[[s]]=igraph_cls(sim_use, method=c("louvain","infomap","leiden"),leiden_res=res,
                                 leiden_iter = 50, leiden_par=c("RBConfigurationVertexPartition"), seed=1)
 }
 
 ### 3. with + integrated scores
 for(s in dimnames(simPlus)[[3]]){
   print(s)
-  clus_noto[[s]]=igraph_cls(simPlus[,,s], method=c("louvain","infomap","leiden"),leiden_res=res,
+  sim_use=trim_adj(simPlus[,,s], n_kp = 120)
+  clus_noto[[s]]=igraph_cls(sim_use, method=c("louvain","infomap","leiden"),leiden_res=res,
                                 leiden_iter = 50, leiden_par=c("RBConfigurationVertexPartition"), seed=1)
 }
 ```
@@ -256,13 +259,15 @@ for(s in dimnames(simPlus)[[3]]){
 ``` r
 for(s in dimnames(exp_sim)[[3]]){
   print(s)
-  clus_noto[[s]]=igraph_cls(exp_sim[,,s], method=c("louvain","infomap","leiden"),leiden_res=res,
+  sim_use=trim_adj(exp_sim[,,s], n_kp = 120)
+  clus_noto[[s]]=igraph_cls(sim_use, method=c("louvain","infomap","leiden"),leiden_res=res,
                                 leiden_iter = 50, leiden_par=c("RBConfigurationVertexPartition"), seed=1)
 }
 
 for(s in dimnames(anno_sim)[[3]]){
   print(s)
-  clus_noto[[s]]=igraph_cls(anno_sim[,,s], method=c("louvain","infomap","leiden"),leiden_res=res,
+  sim_use=trim_adj(anno_sim[,,s], n_kp = 120)
+  clus_noto[[s]]=igraph_cls(sim_use, method=c("louvain","infomap","leiden"),leiden_res=res,
                                 leiden_iter = 50, leiden_par=c("RBConfigurationVertexPartition"), seed=1)
 }
 ```
@@ -281,30 +286,30 @@ head(clus_noto$`GO:OR:soft_cos`) ## each matrix contains cluster ids
 ```
 
     ##         louvain infomap leiden_2_RBConfigurationVertex
-    ## ABHD15A       2       1                              7
-    ## ACBD3         1       1                              8
-    ## ACKR4B        2       1                              1
-    ## ACSBG2        1       1                              9
-    ## ACTB2         1       1                             10
-    ## ACVR1BA       1       1                             11
+    ## ABHD15A       1       3                              1
+    ## ACBD3         5       1                              4
+    ## ACKR4B        1       3                              1
+    ## ACSBG2        2       6                              3
+    ## ACTB2         5       1                              4
+    ## ACVR1BA       2       7                              3
     ##         leiden_2.5_RBConfigurationVertex leiden_3_RBConfigurationVertex
-    ## ABHD15A                                4                              3
-    ## ACBD3                                  5                              4
-    ## ACKR4B                                 1                              5
-    ## ACSBG2                                 6                              6
-    ## ACTB2                                  7                              7
-    ## ACVR1BA                                8                              8
+    ## ABHD15A                                1                              1
+    ## ACBD3                                  3                             15
+    ## ACKR4B                                 1                              1
+    ## ACSBG2                                 8                             13
+    ## ACTB2                                  3                              3
+    ## ACVR1BA                                9                              8
     ##         leiden_3.5_RBConfigurationVertex leiden_4_RBConfigurationVertex
-    ## ABHD15A                                3                              3
-    ## ACBD3                                  4                              4
-    ## ACKR4B                                 5                              5
-    ## ACSBG2                                 6                              6
-    ## ACTB2                                  7                              7
-    ## ACVR1BA                                8                              8
-    ##         leiden_5_RBConfigurationVertex
-    ## ABHD15A                              4
-    ## ACBD3                                5
-    ## ACKR4B                               6
-    ## ACSBG2                               7
-    ## ACTB2                                8
-    ## ACVR1BA                              9
+    ## ABHD15A                                1                              1
+    ## ACBD3                                 17                             17
+    ## ACKR4B                                 1                              1
+    ## ACSBG2                                11                             10
+    ## ACTB2                                  3                              5
+    ## ACVR1BA                                8                              7
+    ##         leiden_5_RBConfigurationVertex leiden_7_RBConfigurationVertex
+    ## ABHD15A                              1                              2
+    ## ACBD3                               18                             29
+    ## ACKR4B                               1                              1
+    ## ACSBG2                              11                             11
+    ## ACTB2                               10                             85
+    ## ACVR1BA                              5                              7
