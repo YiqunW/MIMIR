@@ -1,7 +1,8 @@
 ---
 title: 'Step5: Check clustering results'
 author: "Yiqun Wang"
-doutput: github_document
+output: github_document
+always_allow_html: true
 ---
 
 In this example, we will examine several metrics of the clustering results obtained from Step4, such as number of clusters, number of member genes in clusters, and the agreement between clustering results and manual curation for a subset of notochord genes.
