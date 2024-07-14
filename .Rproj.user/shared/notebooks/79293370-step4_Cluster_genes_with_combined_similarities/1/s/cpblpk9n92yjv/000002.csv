@@ -1,0 +1,4 @@
+"0","## will calculate combinations of the following similarities"
+"0","exp_use = c(""soft_cos"", ""euc"", ""canb"", ""jsdis"")"
+"0","anno_use = c(""string_noDB+GO+Reactome+Interpro"", ""string_noDB+GO_noCC+Reactome+Interpro"", ""string_ExpTxt+GO+Reactome+Interpro"","
+"0","             ""GO+Reactome+Interpro"", ""GO"", ""STRING"", ""Reactome"")"

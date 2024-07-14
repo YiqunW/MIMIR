@@ -1,0 +1,9 @@
+"0","metric_tbl=noto.obj@cluster_metrics
+metric_tbl=metric_tbl[metric_tbl$n_cluster<150,]
+metric_tbl=metric_tbl[metric_tbl$max_cluster<150,]
+
+plotly_scatter(metric_tbl, x=""pct_gene_in_cluster"", y=""AMI"",color=""similarity_mode"", hover_text = ""similarity"", 
+               addline_x = 90, addline_y = 0.6, figsize = c(500,350)) 
+"
+"2","Specifying width/height in layout() is now deprecated.
+Please specify in ggplotly() or plot_ly()"

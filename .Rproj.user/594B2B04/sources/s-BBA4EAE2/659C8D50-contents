@@ -1,0 +1,1361 @@
+library(shinyFiles)
+#library(htmlwidgets)
+library(igraph)
+library(visNetwork)
+library(DT)
+library(reshape2)
+#library(data.table)
+library(abind)
+library(plotly)
+library(shinyWidgets)
+library(RColorBrewer)
+library(htmlTable)
+library(shiny)
+library(shinydashboard)
+#library(NetworkToolbox)
+library(leiden)
+## Define global variables and functions ----
+# Read in data
+source("network_functions.R")
+source("network_modules.R")
+#everything=readRDS("data/Everything_042319(small).rds")
+everything=readRDS("data/Everything_06032020(small).rds")
+#everything=readRDS("data/mock_noto_for_defense.rds")
+#manualCuration=readRDS("Metric_test/curated_subset300.rds")
+#manualCuration=readRDS("Metric_test/Cluster_basis_for_Curation_2022(manual_curation).rds")
+
+# manualCuration=readRDS("Metric_test/manual_paper.rds")
+# check_curation=readRDS("Metric_test/Cluster_basis_for_Curation_2022_paper.rds") 
+
+manualCuration=readRDS("Metric_test/manual_paper.rds")
+check_curation=readRDS("Metric_test/Cluster_basis_for_Curation_2022_paper.rds") #manual_paper.rds
+
+check_module=list()
+check_module$noto=geneXmodule.tbl(check_curation$noto$modules)
+check_module$pcp=geneXmodule.tbl(check_curation$pcp$modules)
+#tissue.name="Notochord"
+#links.use=everything$all_evi.noto #noto/pcp
+# UI ----
+ui <- navbarPage("Gene Module Exploration",
+                 ## Page1 ----
+                 tabPanel("Gene Network",
+                          ## *HC and network parameters ----
+                          fluidRow(
+                            column(6,
+                                   wellPanel(
+                                     fluidRow(
+                                       column(3, selectInput(inputId = "selTissue",
+                                                             label = "Tissue:",
+                                                             choices = c("Notochord","Prechordal plate"), multiple = F, selected="Notochord")),
+                                       column(4, expMetricUI("checkExp")),
+                                       column(3, linkageUI("selLink")),
+                                       column(2, numericInput("K", label="# clusters:", value=10, min=2, max=100, step=1))
+                                     )
+                                   )
+                            ),
+                            column(4,
+                                   wellPanel(
+                                     fluidRow(
+                                       column(7, externalGroupUI("checkAnno")),
+                                       column(5, 
+                                              prettySwitch(inputId = "combExp", label="Adjust coexpression", fill=T, status="success",value = FALSE),
+                                              actionButton("net_update", HTML("Update Network")))
+                                     )
+                                   )
+                            ),
+                            column(2, 
+                                   conditionalPanel(condition="input.combExp", sliderInput("alpha", label = h4("Weight for annotation:"), value = 0.5,min=0, max=1, step = 0.01)))#uiOutput("pickAlpha")
+                          ),
+                          ## *Heatmap ----
+                          fluidRow(
+                            column(6,
+                                   column(3, actionButton("HC_cls","Update Heatmap")),
+                                   column(9, align = 'left', p(textOutput("HC_par")))),
+                            column(6,
+                                   column(12, align = 'left', p(textOutput("Net_par"))))
+                          ),
+                          fluidRow(
+                            column(6, 
+                                   fluidRow(
+                                     column(7, plotlyOutput("HM",height = "800px")),
+                                     column(2, plotlyOutput("HM_gene",height="800px")),
+                                     column(3, plotlyOutput("HM_module",height="800px"))
+                                   )),
+                            ## *Network ----
+                            column(6,
+                                   fluidRow(
+                                     ##need to add a row here to indicate current network parameters
+                                     column(4,
+                                            column(10,
+                                                   sliderInput("frac", label = "Fraction of edges to show:", value = 0.01,min=0, max=1, step = 0.01, ticks = F)),
+                                            column(2,style = "margin: 25px 0px 0px 0px",
+                                                   actionBttn("frac_update", size="xs",icon = icon("refresh")))
+                                     ),
+                                     column(8,
+                                            column(4, uiOutput("HcCls")),
+                                            column(4, uiOutput("listGraphAlg")),
+                                            column(4, uiOutput("listGraphCls"))
+                                     )
+                                   ),
+                                   fluidRow(
+                                     column(10,
+                                            visNetworkOutput("network_genes",height = "700px")),
+                                     column(2, 
+                                            prettySwitch(inputId = "physics", label="Physics", fill=T, status="success",value = FALSE),
+                                            conditionalPanel(condition="input.physics", switchInput(inputId = "physics_state", value = TRUE)),
+                                            conditionalPanel(condition='input.selHcCls!="none" && input.selHcCls!=null', actionBttn("selAll", label = "Select all nodes", size="xs")),
+                                            plotOutput("clusLeg"))
+                                   )
+                            )
+                          ),
+                          ## *Select genes ----
+                          fluidRow(
+                            column(3, uiOutput("geneSelUi")),
+                            column(9,
+                                   textOutput("current_sel"),
+                                   ## *Display info ----
+                                   tabsetPanel(
+                                     type = "tabs",
+                                     tabPanel("Enrichments", DT::dataTableOutput("enrichAnnoTbl")),
+                                     tabPanel("Links", DT::dataTableOutput("geneLinkTbl")),
+                                     tabPanel("Annotations", DT::dataTableOutput("geneAnnoTbl")),
+                                     tabPanel("Notes", htmlOutput("mdList")),
+                                     tabPanel("Expression Plots",plotlyOutput("exp_genes")),
+                                     ## *module tab panel ----
+                                     tabPanel("Curated Modules", 
+                                              column(8, DT::dataTableOutput("curatedTbl"),
+                                                     plotlyOutput("exp_modules")),
+                                              column(4,
+                                                     autoModuleUI("getAutoModule"),
+                                                     fluidRow(
+                                                       column(9, style="padding-right:0px", uiOutput("showModules")),
+                                                       column(3, style = "margin: 25px 0px 0px 0px; padding-left:0px", actionBttn("plotModule", label=HTML("Plot<br/>Expression"),style="simple", color="primary", size = "xs"))
+                                                     ),
+                                                     uiOutput("selectModules"),
+                                                     fluidRow(
+                                                       column(9, style="padding-right:0px", uiOutput("modifyModules")),
+                                                       column(3, style = "margin: 25px 0px 0px 0px; padding-left:0px", actionBttn("updateModule", label=HTML("Update<br/>module"),style="simple", color="primary", size = "xs"))
+                                                     ),
+                                                     fluidRow(
+                                                       column(9, style="padding-right:0px", uiOutput("removeModules")),
+                                                       column(3, style = "margin: 25px 0px 0px 0px; padding-left:0px", actionBttn("confirmRm",icon = icon("trash"), style="fill"))
+                                                     ),
+                                                     strong("Current candidate genes in selected tissue:"),
+                                                     verbatimTextOutput("Candidates"),
+                                                     fluidRow(
+                                                       column(4, style="padding-right:0px", uiOutput("addCandidate")),
+                                                       column(2, style="padding-left:0px", actionBttn("addGeneAct",icon = icon("plus"), style="fill")),
+                                                       column(4, style="padding-right:0px", uiOutput("rmCandidate")),
+                                                       column(2, style="padding-left:0px", actionBttn("rmGeneAct",icon = icon("minus"), style="fill"))
+                                                     ),
+                                                     fluidRow(
+                                                       column(9,style="padding-right:0px", textInputAddon("saveRds", label="Save current curation as", value="manual_curation.rds", addon = "./")),
+                                                       column(3, style = "margin: 25px 0px 0px 0px; padding-left:0px", actionBttn("confirmSave",icon = icon("save"), style="fill"))
+                                                     ),
+                                                     fluidRow(
+                                                       column(9,style="padding-right:0px", textInputAddon("loadRds", label="Reload curation rds", value="manual_curation.rds", addon = "./")),
+                                                       column(3, style = "margin: 25px 0px 0px 0px; padding-left:0px", actionBttn("confirmLoad",icon = icon("upload"), style="fill"))
+                                                     )
+                                              )## insert another UI after modify modules for modification input
+                                              #tabPanel("Curated Modules", tableOutput("modules"))
+                                     )
+                                     ## This is a place holder for gene-gene association scores and gene annotation dataframes
+                                     # actionButton("analyze_cluster",HTML("Analyze<br/>Clusters"),
+                                     #              style="text-align:center; width:90px")
+                                   )
+                            )
+                          )
+                 ),
+                 #### Page2 ----
+                 tabPanel("Network clustering",
+                          fluidRow(
+                            column(4,
+                                   wellPanel(
+                                     fluidRow(
+                                       column(4, selectInput(inputId = "selTissueP2",
+                                                             label = "Tissue:",
+                                                             choices = c("Notochord","Prechordal plate"), multiple = F, selected="Notochord")),
+                                       column(4, expMetricUI("checkExpP2")),
+                                       column(4, selectInput(inputId = "d0P2",
+                                                             label = "Neural Coexpression score:",
+                                                             choices = c("0","mean","median"), multiple = F, selected="0"))
+                                     )
+                                   )
+                            ),
+                            column(6,
+                                   wellPanel(
+                                     fluidRow(
+                                       column(7, externalGroupUI("checkAnnoP2")),
+                                       column(5, 
+                                              prettySwitch(inputId = "combExpP2", label="Adjust coexpression", fill=T, status="success",value = TRUE),
+                                              prettySwitch(inputId = "rmNoAnnoP2", label="Remove coexpression-only edges", fill=T, status="success",value = TRUE),
+                                              actionButton("net_updateP2", HTML("Update Network")))
+                                     )
+                                   )
+                            ),
+                            column(2, 
+                                   conditionalPanel(condition="input.combExpP2", sliderInput("alphaP2", label = h4("Weight for annotation:"), value = 0.5,min=0, max=1, step = 0.01))
+                                   )
+                            ),
+                          fluidRow(
+                            ##need to add a row here to indicate current network parameters
+                            column(4,
+                                   column(10,
+                                          sliderInput("fracP2", label = "Fraction of edges to show:", value = 0.01,min=0, max=1, step = 0.01, ticks = F)),
+                                   column(2,style = "margin: 25px 0px 0px 0px",
+                                          actionBttn("frac_updateP2", size="xs",icon = icon("refresh")))
+                            ),
+                            column(4, uiOutput("listGraphAlgP2")),
+                            column(4, uiOutput("listGraphClsP2"))
+                          ),
+                          fluidRow(
+                            column(10,
+                                   visNetworkOutput("network_genesP2",height = "700px")),
+                            column(2,
+                                   prettySwitch(inputId = "physicsP2", label="Physics", fill=T, status="success",value = FALSE),
+                                   conditionalPanel(condition="input.physics", switchInput(inputId = "physics_stateP2", value = TRUE)),
+                                   actionButton("clusterP2", HTML("Cluster")),
+                                   textInputAddon("save_cls_dirP2", label="Save cluster df as", value="graph_cluster.csv", addon = "./"),
+                                   actionButton("save_clusterP2", HTML("Save cluster results"))
+                            )
+                          ),
+                          fluidRow(
+                            textOutput("current_selP2"),
+                            plotlyOutput("clusLegP2")
+                          )
+                          
+                )
+)
+
+server <- function(input, output, session) {
+  ############ page1 ##########
+  ## Get basic network and heatmap data ----
+  #### __tissue name----
+  tissue.name <- reactive({input$selTissue})
+  
+  ## __3d matrix with all evidence channels (including expression distances)----
+  links.use <- reactive({
+    if(tissue.name()=="Notochord"){
+      everything$all_evi.noto
+    }else if(tissue.name()=="Prechordal plate"){
+      everything$all_evi.pcp
+    }
+  })
+  
+  ## __selected channels from user input ----
+  anno_use <- callModule(externalGroup,"checkAnno")
+  exp_use <- callModule(expMetric, "checkExp")
+  
+  ## __gene by cell/pt matrices for visualization ----
+  dyn.use <- reactive({
+    if(tissue.name()=="Notochord"){
+      if(exp_use()=="soft_cos_tissue"){
+        smth=everything$smooth_exp_noto_only
+      }else{
+        smth=everything$smooth_exp_noto
+      }
+      raw=everything$raw_exp_noto
+    }else if(tissue.name()=="Prechordal plate"){
+      if(exp_use()=="soft_cos_tissue"){
+        smth=everything$smooth_exp_pcp_only
+      }else{
+        smth=everything$smooth_exp_pcp
+      }
+      raw=everything$raw_exp_pcp
+    }
+    pts=as.numeric(colnames(smth))
+    order_col=order(pts,decreasing = F)
+    plt_intv=seq(min(pts),max(pts),length.out = 100)
+    pts_order=pts[order_col]
+    pt.cut=findInterval(pts_order,plt_intv)
+    plt.ind=which(diff(pt.cut)!=0)+1
+    list("smth"=smth[,order_col],"raw"=raw[,order(as.numeric(colnames(raw)))], "plt_pt"=as.character(pts_order[plt.ind]))
+  })
+  
+  
+  ## Build heatmap according to co-expression ----
+  HC_link <- callModule(linkage, "selLink")
+  
+  ## __Expression heatmap (can potentially switch between raw and smoothed data with dyn.use()$raw/dyn.use()$smth) ----
+  Hmap <- eventReactive(input$HC_cls, {
+    dist.m=links.use()[,,exp_use()]
+    k <- input$K
+    cls=cutree(hclust(as.dist(dist.m),method=HC_link()), k) #
+    my.hm <- my.heatmap(M=dyn.use()$smth, dist.m=dist.m, method=HC_link(), cls = cls, plot_hm=F) #
+    list("Hmap"=my.hm, "K"=k, "Cls"=cls, "Col"=get.colors(k)) #
+    #my.hm <- my.heatmap(M=dyn.use()$smth, dist.m=dist.m,method=HC_link(), plot_hm=F)
+    #list("Hmap"=my.hm, "K"=k, "Cls"=cutree(my.hm$hc,k), "Col"=get.colors(k))
+  })
+  
+  ## __Expression heatmap with row sidebar for clusters----
+  composit_HM <- reactive({
+    hc_cls=Hmap()$Cls
+    show.heatmap(Hmap()$Hmap$p, cls=hc_cls, colors = Hmap()$Col) %>% layout(margin = list(l=0))
+  })
+  
+  output$HM <- renderPlotly({
+    composit_HM()
+  })
+  
+  ## __Side bar to highlight genes selected from user input ----
+  input_genes <- callModule(geneSelect, "geneSelect")
+  
+  ## __*reactive value to store user input genes
+  label_genes <- reactiveValues(gene=NULL, geneUI=NULL, gene_graph=NULL)
+  
+  observe({
+    genes=input$current_node_id
+    label_genes[["gene"]] <- genes
+    label_genes[["gene_graph"]] <- genes
+  })
+  
+  observe({
+    genes= input_genes()
+    label_genes[["gene"]] <- genes
+    label_genes[["geneUI"]] <- genes
+  })
+  
+  geneSideBar <- reactive({
+    if(!is.null(label_genes[["gene"]])){
+      s <- event_data("plotly_relayout", source=composit_HM()$x$source)
+      genes=Hmap()$Hmap$p$x$attrs[[1]]$y
+      cls= genes%in%label_genes[["gene"]]
+      p <- plot_ly(y=genes, z=as.matrix(cls*1,ncol=1),type = "heatmap",colors = "Greys",showscale=FALSE)
+      p %>% layout(xaxis = list(showticklabels = F),
+                   yaxis=list(tickvals = label_genes[["gene"]], ticktext = label_genes[["gene"]], side="right", range=c(s[["yaxis.range[0]"]],s[["yaxis.range[1]"]])),
+                   margin = list(l=0, r=100,autoexpand=F))
+    }
+  })
+  
+  output$HM_gene <- renderPlotly({
+    geneSideBar()
+  })
+  
+  ## Build Network ----
+  ## __Compute the adjacency matrix for network graph ----
+  Matrices <- eventReactive(c(input$net_update,input$HC_cls), {
+    pathways=c("GO","HGNC","Reactome")
+    if(length(intersect(anno_use(), pathways)) > 1){
+      if(all(pathways %in% anno_use())){
+        anno_use=c("GO+HGNC+Reactome", setdiff(anno_use(),pathways))
+      }else if(all(c("GO","HGNC") %in% anno_use())){
+        anno_use=c("GO+HGNC", setdiff(anno_use(),c("GO","HGNC")))
+      }else if(all(c("GO","Reactome") %in% anno_use())){
+        anno_use=c("GO+Reactome", setdiff(anno_use(),c("GO","Reactome")))
+      }else if(all(c("HGNC","Reactome") %in% anno_use())){
+        anno_use=c("HGNC+Reactome", setdiff(anno_use(),c("HGNC","Reactome")))
+      }
+    }else{
+      anno_use=anno_use()
+    }
+    annoM=combined_scores(links.use(), anno_use)
+    if(input$combExp){
+      expM=links.use()[,,exp_use()]
+      d0=median(expM[upper.tri(expM)])
+      adjM=(d0-expM)*(input$alpha*annoM+1-input$alpha) ##expM contains distances, adjM contais similarities
+      adjM=adjM*(adjM>0)
+      list(adjM=adjM, annoM=annoM)
+    }else{
+      list(adjM=annoM)
+    }
+  })
+  
+  adjM <- reactive(Matrices()$adjM)
+  
+  ## __Build network of all genes using the adjacency matrix ----
+  g <- eventReactive(c(adjM(), input$frac_update), {
+    adjM=adjM()
+    g2g(adjM,genes.use=NULL,thres=NULL,simp=T, frac=input$frac, cls=Hmap()$Cls, colors=Hmap()$Col)
+  },
+  ignoreInit = T)
+  
+  ## __Build a sub-network for genes in the selected hierarchical cluster ----
+  sub_g <- eventReactive(c(input$net_update, input$frac_update, input$selHcCls), {
+    if(input$selHcCls!="none"){
+      genes=names(which(Hmap()$Cls==input$selHcCls))
+      adjM=adjM()
+      g2g(adjM,genes.use=genes,thres=NULL,simp=T, frac=input$frac, cls = Hmap()$Cls, colors=Hmap()$Col)
+    }else{
+      "none"
+    }
+  },
+  ignoreInit = T, ignoreNULL = T)
+  
+  ## Compute graph clusterings (with igraph) for genes in the selected hierarchical cluster ----
+  net_cls <- reactiveValues(df=NULL)
+  last_tissue <- reactiveValues(tissue=NULL)
+  
+  ## __Reset when network parameter is updated ----
+  observeEvent(input$net_update, {
+    net_cls$df <- NULL
+    if(input$selHcCls!="none"){
+      genes=names(which(Hmap()$Cls==input$selHcCls))
+      net_cls$df[[paste0("HC_",input$selHcCls)]]=igraph_cls(genes, adjM())
+      if(!is.null(input$selGraphAlg) && input$selGraphAlg!="none"){
+        net_list <- net_cls$df
+        net_df=net_list[[paste0("HC_",input$selHcCls)]]
+        updateSelectInput(session,"selGraphCls", choices=c("none",sort(unique(net_df[,input$selGraphAlg]))))
+      }
+    }
+  })
+  
+  ## __Compute graph cluster for current HC cluster ----
+  observeEvent(input$selHcCls,{
+    if(input$selHcCls!="none"){
+      if(!paste0("HC_",input$selHcCls)%in%names(net_cls$df)){
+        genes=names(which(Hmap()$Cls==input$selHcCls))
+        net_cls$df[[paste0("HC_",input$selHcCls)]]=igraph_cls(genes, adjM())
+      }
+    }
+  })
+  
+  ## __Update node colors according to graph clustering ----
+  observeEvent(input$selGraphAlg, {
+    HcCls=input$selHcCls
+    if(HcCls!="none"){
+      if(input$selGraphAlg!="none"){
+        nodes.cls = sub_g()$nodes
+        nodes.cls$group=net_cls$df[[paste0("HC_",HcCls)]][nodes.cls$id,input$selGraphAlg]
+        nodes.cls$color=get.colors(max(nodes.cls$group))[nodes.cls$group]
+        visNetworkProxy("network_genes") %>%
+          visUpdateNodes(nodes=nodes.cls)
+      }else{
+        visNetworkProxy("network_genes") %>%
+          visUpdateNodes(nodes=sub_g()$nodes)
+      }
+    }
+  },
+  ignoreInit = T, ignoreNULL = T)
+  
+  ## Generate network visualization ----
+  ## __*Reactive value storing current network that should be shown (global or sub network) ----
+  current_g <- reactiveValues(nodes=NULL, edges=NULL)
+  
+  observe({
+    if(!is.null(input$selHcCls) && input$selHcCls=="none"){
+      if(!is.null(g())){
+        current_g$nodes <- g()$nodes
+        current_g$edges <- g()$edges
+      }
+    }else{
+      if(!is.null(sub_g()) && sub_g()!="none"){
+        current_g$nodes <- sub_g()$nodes
+        current_g$edges <- sub_g()$edges
+      }
+    }
+  })
+  
+  ## __Build visualization with visNetwork ----
+  observeEvent(c(current_g$nodes, current_g$edges), {
+    nodes <- current_g$nodes
+    edges <- current_g$edges
+    if(input$selHcCls!="none"){
+      if(!is.null(input$selGraphAlg) && input$selGraphAlg!="none"){
+        HcCls=input$selHcCls
+        nodes.cls = sub_g()$nodes
+        nodes.cls$group=net_cls$df[[paste0("HC_",HcCls)]][nodes.cls$id,input$selGraphAlg]
+        nodes.cls$color=get.colors(max(nodes.cls$group))[nodes.cls$group]
+        nodes <- nodes.cls
+      }
+    }
+    output$network_genes <- renderVisNetwork({
+      visNetwork(nodes, edges) %>%
+        visExport() %>%
+        visInteraction(multiselect=T)%>%
+        visPhysics(forceAtlas2Based = list(centralGravity=0.001, damping=0.1)) %>%
+        visIgraphLayout("layout_with_mds",physics = input$physics)%>%
+        #visIgraphLayout("layout_nicely",physics = input$physics)%>%
+        #visPhysics(barnesHut = list(gravitationalConstant=-1000,centralGravity=0.01)) %>%
+        visOptions(highlightNearest = list("enabled"=T, "degree"=0)) %>%
+        visEvents(selectNode = "function(e){
+                  Shiny.onInputChange('current_node_id', e.nodes);
+    }")  %>%
+        visEvents(deselectNode = "function(e){
+                  Shiny.onInputChange('current_node_id', e.nodes);
+        }")
+      #visLegend(enabled = T, useGroups = TRUE) %>%
+  })
+    },
+  ignoreInit = T, ignoreNULL = T)
+  
+  ## __Get the genes in selected graph cluster/motif and show them on the gene side bar next to the heatmap ----
+  observe({
+    if(!is.null(input$selGraphCls) && !is.null(input$selGraphAlg)){
+      if(input$selGraphCls!="none" && input$selGraphAlg!="none"){
+        net_df=net_cls$df[[paste0("HC_",input$selHcCls)]]
+        genes=rownames(net_df)[which(net_df[,input$selGraphAlg]==as.numeric(input$selGraphCls))]
+        label_genes[["gene"]]=genes
+        label_genes[["gene_graph"]]=genes
+      }
+    }
+  })
+  
+  ## __Highlight these genes in the network visualization ----
+  observe({
+    if(!is.null(label_genes$gene_graph)){
+      visNetworkProxy("network_genes") %>%
+        visSetSelection(nodesId = intersect(label_genes$gene_graph,current_g$nodes$id), unselectAll = T)
+    }else{
+      visNetworkProxy("network_genes") %>%
+        visUnselectAll()
+    }
+  })
+  
+  ## __Highlight genes from other UI ----
+  observeEvent(label_genes$geneUI, {
+    genes=label_genes$geneUI
+    in_net=intersect(genes,current_g$nodes$id)
+    if(length(in_net)>0){
+      visNetworkProxy("network_genes") %>%
+        visSetSelection(nodesId = in_net, unselectAll = T)
+      ## clear cluster selection
+      if(!is.null(input$selGraphCls) && input$selGraphCls!="none"){
+        updateSelectInput(session,"selGraphCls", selected = "none")
+      }
+    }
+  })
+  
+  observeEvent(input$selAll,{
+    label_genes[["gene"]] <- current_g$nodes$id
+    visNetworkProxy("network_genes") %>%
+      visSetSelection(nodesId = current_g$nodes$id, unselectAll = T)
+    if(!is.null(input$selGraphCls) && input$selGraphCls!="none"){
+      updateSelectInput(session,"selGraphCls", selected = "none")
+    }
+  })
+  
+  ## __If physics is enabled, control the state of the network stablization ----
+  observe(
+    if(input$physics_state){
+      visNetworkProxy("network_genes") %>%
+        visPhysics(enabled=T) #%>%
+      #visPhysics(enabled=T, forceAtlas2Based = list(gravitationalConstant=-10000, damping=0.1, springLength= 500, centralGravity=0.0001, springConstant=0.04, avoidOverlap=0.2))
+    }else{
+      visNetworkProxy("network_genes") %>%
+        visPhysics(enabled=F)
+      #visPhysics(enabled=F, forceAtlas2Based = list(gravitationalConstant=-10000, damping=0.1, springLength= 500, centralGravity=0.0001, springConstant=0.04, avoidOverlap=0.2))
+    }
+  )
+  
+  ## Generate info df/plot for selected genes ----
+  ## __Table for annotations associated with selected genes ----
+  module_info <- eventReactive(input$HC_cls, {
+    getModuleInfo(tissue.name(), everything, annot=c("GO", "Reactome", "Interpro", "HGNC"))
+  })
+  
+  ## __Table for annotation enrichment ----
+  output$enrichAnnoTbl <- renderDataTable({
+    genes=label_genes[["gene"]]
+    if(length(genes)>0){
+      fisher.exact.enrichment(genes, gXm=module_info()$geneXmodule, p.adj.method="fdr")
+    }
+  })
+  
+  ## __Table for gene-gene association evidences ----
+  gene_links <- eventReactive(c(input$HC_cls, input$net_update), {
+    getLinks(links.use(), combined=adjM(), channels=c(exp_use(), "HuMap", anno_use()))
+  })
+  
+  ## Curated modules and candidates ----
+  workingCuration <- reactiveValues(noto=manualCuration$noto, pcp=manualCuration$pcp)
+  curated <- reactiveValues(candidates=NULL, modules=NULL)
+  
+  ## __automatically suggest modules ----
+  autoModuleList <- callModule(autoModule, "getAutoModule", Hmap, adjM)
+  
+  observeEvent(autoModuleList(), {
+    if(length(curated$modules)==0){
+      curated$modules=autoModuleList()
+    }else{
+      confirmSweetAlert(
+        session = session,
+        inputId = "saveAutoModule",
+        type = "warning",
+        title = paste0("Overwrite current modules?"),
+        text="Unsaved changes in current modules will be lost.",
+        danger_mode = TRUE
+      )
+    }
+  })
+  
+  observeEvent(input$saveAutoModule, {
+    if(input$saveAutoModule){
+      curated$modules=autoModuleList()
+    }
+  })
+  
+  ## __reload curation from rds file ----
+  observeEvent(input$confirmLoad, {
+    if(file.exists(input$loadRds)){
+      confirmSweetAlert(
+        session = session,
+        inputId = "reLoadRds",
+        type = "warning",
+        title = paste0("Read curation from ", input$loadRds, "?"),
+        text="Unsaved changes in current curation will be lost.",
+        danger_mode = TRUE
+      )
+    }else{
+      confirmSweetAlert(
+        session = session,
+        inputId = "noLoadRds",
+        type = "error",
+        title = "Error!",
+        text=paste0("File ./", input$loadRds, " does not exist."),
+        danger_mode = TRUE
+      )
+    }
+  })
+  
+  observeEvent(input$reLoadRds, {
+    if(input$reLoadRds){
+      manualCuration=readRDS(input$loadRds)
+      workingCuration$noto = manualCuration$noto
+      workingCuration$pcp = manualCuration$pcp
+      if(!is.null(last_tissue$tissue)){
+        if(last_tissue$tissue=="Notochord"){
+          curated$modules=workingCuration$noto$modules
+          curated$candidates=workingCuration$noto$candidates
+        }else if(last_tissue$tissue=="Prechordal plate"){
+          curated$modules=workingCuration$pcp$modules
+          curated$candidates=workingCuration$pcp$candidates
+        }
+      }
+    }
+  })
+  
+  ## __Use curation for selected tissue ----
+  observeEvent(input$HC_cls, {
+    net_cls$df <- NULL
+    updateSliderInput(session,"frac",value=0.01)
+    updateSelectInput(session,"selHcCls",selected = "none")
+    if(is.null(last_tissue$tissue) || last_tissue$tissue!=tissue.name()){
+      if(!is.null(last_tissue$tissue)){
+        if(last_tissue$tissue=="Notochord"){
+          workingCuration$noto=reactiveValuesToList(curated)
+        }else if(last_tissue$tissue=="Prechordal plate"){
+          workingCuration$pcp=reactiveValuesToList(curated)
+        }
+      }
+      if(tissue.name()=="Notochord"){
+        curated$modules=workingCuration$noto$modules
+        curated$candidates=workingCuration$noto$candidates
+      }else if(tissue.name()=="Prechordal plate"){
+        curated$modules=workingCuration$pcp$modules
+        curated$candidates=workingCuration$pcp$candidates
+      }
+    }
+    last_tissue$tissue <- tissue.name()
+  }, ignoreInit = T)
+  
+  ## __Save current curation to rds ----
+  observeEvent(input$confirmSave, {
+    save_path=input$saveRds
+    if(!endsWith(tolower(save_path),".rds")){
+      save_path=paste0(save_path,".rds")
+    }
+    if(file.exists(save_path)){
+      confirmSweetAlert(
+        session = session,
+        inputId = "overWriteRds",
+        type = "warning",
+        title = paste0(save_path," alreay exists!"),
+        text="Overwrite existing file?",
+        danger_mode = TRUE
+      )
+    }else{
+      toSave=reactiveValuesToList(workingCuration)
+      if(tissue.name()=="Notochord"){
+        toSave$noto$modules = curated$modules
+        toSave$noto$candidates=curated$candidates
+      }else if(tissue.name()=="Prechordal plate"){
+        toSave$pcp$modules = curated$modules
+        toSave$pcp$candidates=curated$candidates
+      }
+      saveRDS(toSave,save_path)
+      confirmSweetAlert(
+        session = session,
+        inputId = "rdsSaved",
+        type = "success",
+        text = paste0("Current curation saved to", save_path)
+      )
+    }
+  })
+  
+  observeEvent(input$overWriteRds,{
+    if(input$overWriteRds){
+      save_path=input$saveRds
+      if(!endsWith(tolower(save_path),".rds")){
+        save_path=paste0(save_path,".rds")
+      }
+      toSave=reactiveValuesToList(workingCuration)
+      if(tissue.name()=="Notochord"){
+        toSave$noto$modules = curated$modules
+        toSave$noto$candidates=curated$candidates
+      }else if(tissue.name()=="Prechordal plate"){
+        toSave$pcp$modules = curated$modules
+        toSave$pcp$candidates=curated$candidates
+      }
+      saveRDS(toSave,save_path)
+      confirmSweetAlert(
+        session = session,
+        inputId = "rdsOverWrite",
+        type = "success",
+        text = paste0("Current curation saved over", save_path)
+      )
+    }
+  })
+  
+  ## __Remove module ----
+  observeEvent(input$confirmRm, {
+    #print(input$rmModule)
+    confirmSweetAlert(
+      session = session,
+      inputId = "RmConfirmed",
+      type = "warning",
+      title = paste0("Remove module ",paste0(input$rmModule, collapse=", ")," ?"),
+      danger_mode = TRUE
+    )
+  })
+  
+  observeEvent(input$RmConfirmed, {
+    if(input$RmConfirmed){
+      tissue.genes=dimnames(links.use())[[1]]
+      curated$modules=curated$modules[setdiff(names(curated$modules),input$rmModule)]
+      curated$modules[["Not annotated"]]=setdiff(tissue.genes,unlist(curated$modules[setdiff(names(curated$modules),"Not annotated")]))
+    }
+  })
+  
+  observeEvent(input$updateModule, {
+    #if(!input$selModule%in%names(curated$modules)){
+    genes=str2genes(input$writeModule)
+    tissue.genes=dimnames(links.use())[[1]]
+    if(length(setdiff(genes,tissue.genes))>0){
+      genes.not=setdiff(genes,tissue.genes)
+      genes=intersect(genes,tissue.genes)
+      if(length(genes)>0){
+        sendSweetAlert(
+          session = session,
+          title = "Warning!",
+          text = paste0(paste0(genes.not,collapse = ", ")," are not genes in the tissue! Updating module with genes found only."),
+          type = "warning"
+        )
+        curated$modules[[input$selModule]]=sort(unique(genes))
+      }else{
+        sendSweetAlert(
+          session = session,
+          title = "Error!",
+          text = paste0("None of the input are genes in the tissue!"),
+          type = "error"
+        )
+      }
+    }else{
+      curated$modules[[input$selModule]]=sort(unique(genes))
+    }
+    ## update the module with un-annotated genes
+    curated$modules[["Not annotated"]]=setdiff(tissue.genes,unlist(curated$modules[setdiff(names(curated$modules),"Not annotated")]))
+    #}
+  })
+  
+  ## __Add/remove candidate genes ----
+  observeEvent(input$addGeneAct, {
+    curated$candidates=c(input$addGene, curated$candidates)
+  })
+  
+  observeEvent(input$rmGeneAct, {
+    curated$candidates=setdiff(curated$candidates, input$rmGene)
+  })
+  
+  ## [Output] ----
+  ## Datatables ----
+  ## __gene-gene association evidence ----
+  output$geneLinkTbl <- renderDataTable({
+    genes=label_genes[["gene"]]
+    if(length(genes)>1){
+      linkTbl(gene_links(), genes)
+    }
+  })
+  
+  ## __gene annotation ----
+  output$geneAnnoTbl <- renderDataTable({
+    #from either the user input or from the network selection
+    genes=label_genes[["gene"]]
+    if(length(genes)>0){
+      annoTbl(module_info(), genes) 
+    }
+  })
+  
+  ## __gene info md ----
+  output$mdList <- renderUI({
+    genes=label_genes[["gene"]]
+    if(length(genes)>0){
+      genesMd <- data.frame(gene=genes, stringsAsFactors = F)
+      rownames(genesMd)=genes
+      genesMd$notes=""
+      for(gene in genes){
+        md_path=paste0("data/geneNotes/",gene,".md")
+        if(file.exists(md_path)){
+          genesMd[gene,"notes"]=includeMarkdown(md_path)
+        }else{
+          genesMd[gene,"notes"]="No file found."
+        }
+        
+        if(gene%in%rownames(check_module$noto)){
+          genesMd[gene,"noto_module(old)"]=knitr::knit2html(text=paste0("`",paste(colnames(check_module$noto)[which(check_module$noto[gene,]==1)],collapse = "`, `"),"`"),
+                                                            fragment.only = TRUE)
+        }else{genesMd[gene,"noto_module(old)"]=""}
+        if(gene%in%rownames(check_module$pcp)){
+          genesMd[gene,"pcp_module(old)"]=knitr::knit2html(text=paste0("`",paste(colnames(check_module$pcp)[which(check_module$pcp[gene,]==1)],collapse = "`, `"),"`"),
+                                                           fragment.only = TRUE)
+        }else{genesMd[gene,"pcp_module(old)"]=""}
+        
+        m.tbl.noto=geneXmodule.tbl(workingCuration$noto$modules)
+        m.tbl.pcp=geneXmodule.tbl(workingCuration$pcp$modules)
+        if(gene%in%rownames(m.tbl.noto)){
+          genesMd[gene,"noto_module(current)"]=knitr::knit2html(text=paste0("`",paste(colnames(m.tbl.noto)[which(m.tbl.noto[gene,]==1)],collapse = "`, `"),"`"),
+                                                                fragment.only = TRUE)
+        }else{genesMd[gene,"noto_module(current)"]=""}
+        if(gene%in%rownames(m.tbl.pcp)){
+          genesMd[gene,"pcp_module(current)"]=knitr::knit2html(text=paste0("`",paste(colnames(m.tbl.pcp)[which(m.tbl.pcp[gene,]==1)],collapse = "`, `"),"`"),
+                                                               fragment.only = TRUE)
+        }else{genesMd[gene,"pcp_module(current)"]=""}
+      }
+      #HTML(htmlTable(genesMd,rnames = F,align = "left",css.cell = "border-bottom: 1px solid lightgrey; padding-left: 30px"))
+      #tbl <- htmlTable(genesMd,rnames = F,align = "left",css.cell = "border-bottom: 1px solid lightgrey; padding-left: 30px")
+      tbl <- htmlTable(genesMd,rnames = F,align = "left",css.cell = c("width:8%","width:44%","width:12%; font-size:13px","width:12%; font-size:13px","width:12%; font-size:13px","width:12%; font-size:13px"))
+      HTML(tbl)
+    }
+  })
+  
+  ## __curated modules ----
+  # tableModules <- reactive({
+  #   input$ModulesShow
+  # })
+  # 
+  output$curatedTbl <- renderDataTable({
+    ## select which modules to display, default to show all
+    if(!is.null(input$ModulesShow)){
+      module_names <- input$ModulesShow
+    }else{
+      module_names=names(curated$modules)
+    }
+    if(length(module_names)>0){
+      module_df=t(as.data.frame(lapply(curated$modules[module_names],function(x) paste(x,collapse = ", ")), row.names="Genes", stringsAsFactors = F))
+      module_df=as.data.frame(module_df)
+      module_df$Module=module_names
+      module_df[,c("Module","Genes")]
+    }
+  },rownames= FALSE)
+  
+  ## __module heatmap ----
+  module_hmap <- reactive({
+    num_modules=length(curated$modules)
+    if(num_modules>0){
+      if(is.null(input$ModulesShow)){
+        modules.use=names(curated$modules)
+      }else{
+        modules.use=input$ModulesShow
+        num_modules=length(modules.use)
+      }
+      s <- event_data("plotly_relayout", source=composit_HM()$x$source)
+      genes=Hmap()$Hmap$p$x$attrs[[1]]$y
+      module.mat=matrix(0, nrow = length(genes), ncol = num_modules)
+      rownames(module.mat)=genes
+      colnames(module.mat)=modules.use
+      for(i in modules.use){
+        module.mat[curated$modules[[i]], i]=1
+      }
+      p <- plot_ly(y=genes,x=colnames(module.mat), z=module.mat,type = "heatmap",showscale=FALSE)
+      p %>% layout(xaxis = list(showticklabels = F),
+                   yaxis=list(showticklabels = F, range=c(s[["yaxis.range[0]"]],s[["yaxis.range[1]"]])),
+                   margin = list(l=0, r=0,autoexpand=F)) %>% config(displayModeBar = F)
+    }
+  })
+  
+  output$HM_module <- renderPlotly({
+    module_hmap()
+  })
+  
+  ## Text outputs ----
+  ## __currently selected genes ----
+  observeEvent(label_genes$gene, {
+    genes=label_genes$gene
+    output$current_sel <- renderText({
+      paste("Genes in current selection:", paste0(genes,collapse = ", "))
+    })
+  }, ignoreNULL = F)
+  
+  
+  ## __current HC/Network parameters ----
+  output$HC_par <- renderText({
+    evi <- eventReactive(input$HC_cls,{
+      paste0("Current heatmap: ","Co-expression: ", exp_use()[1], "; Linkage: ", HC_link(), "; K=", input$K)
+      #paste0("Current heatmap:","Co-expression: ", exp_use()[1], "; Annotations: ", paste(anno_use(),collapse = ", "), 
+      #       "; Weight=", input$alpha, "; FractionVis=", input$frac)
+    })
+    evi()
+  })
+  
+  output$Net_par <- renderText({
+    evi <- eventReactive(input$net_update,{
+      if(input$combExp){
+        exp_comb <- paste0("; Co-expression: ", exp_use()[1],"; alpha: ", input$alpha,".")
+      }else{
+        exp_comb <- "."
+      }
+      paste0("Current networkp: ","Annotations: ", paste(anno_use(),collapse = ", "),exp_comb)
+    })
+    evi()
+  })
+  
+  ## __current curated candidates ----
+  output$Candidates <- renderText({
+    if(!is.null(curated$candidates)){
+      paste0(sort(curated$candidates),collapse = ", ")
+    }else{
+      "No candidate gene yet."
+    }
+  })
+  
+  ## Plots ----
+  ## __graph cluster color legend ----
+  output$clusLeg <- renderPlot({
+    if(!is.null(input$selGraphAlg) && input$selGraphAlg!="none"){
+      if(input$selHcCls!="none"){
+        net_list <- net_cls$df
+        net_df=net_list[[paste0("HC_",input$selHcCls)]]
+        clses=sort(unique(net_df[,input$selGraphAlg]),decreasing = F)
+        cols.use=get.colors(max(clses))[clses]
+        num.col=2
+        par(mfcol=c(ceiling(length(clses)/2),2),mar=c(0,0,0,0),oma=c(0,0,1,0))
+        for(cls in clses){
+          plot(0,0,pch=16,cex=4,axes=FALSE,col=cols.use[cls],xlim = c(-1,4))
+          text(x=1.5,y=0,cls)
+          #mtext(cls, side=4, outer=T)
+        }
+      }
+    }
+  })
+  
+  ## __gene expression plots ----
+  output$exp_genes <- renderPlotly({
+    genes=label_genes[["gene"]]
+    if(length(genes)>0){
+      geneByPt=dyn.use()[["smth"]]
+      geneByPt=geneByPt[,dyn.use()[["plt_pt"]]]
+      if(length(genes)<=50){
+        plot_genes(genes, geneByPt)
+      }else{
+        ribbon_genes(genes, geneByPt)
+      }
+    }
+  })
+  
+  ## __gene modules expression plots ----
+  observeEvent(input$plotModule, {
+    if(!is.null(input$ModulesShow)){
+      module_names <- input$ModulesShow
+      geneByPt=dyn.use()[["smth"]]
+      geneByPt=geneByPt[,dyn.use()[["plt_pt"]]]
+      output$exp_modules <- renderPlotly({
+        ribbon_genes(curated$modules[module_names],geneByPt,scale=F)
+      })
+    }
+  })
+  #plot_modules <- callModule(moduleSelect, "moduleSelect")
+  
+  ## __Side bar to highlight genes selected from user input ----
+  
+  ## [RenderUI] ----
+  ## gene selection UI ----
+  output$geneSelUi <- renderUI({
+    geneSelectPanelUI("geneSelect",links.use())
+  })
+  
+  ## module selection UI for expression plots ----
+  output$moduleSelUi <- renderUI({
+    ModuleSelectPanelUI("moduleSelect",curated$modules)
+  })
+  
+  ## module UI ----
+  ## __select module to show in table ----
+  observeEvent(curated$modules, {
+    if(length(curated$modules)==0){
+      choices=""
+      choicesize=""
+    }else{
+      choices=sort(names(curated$modules))
+      choicesize=c("",sort(names(curated$modules)))
+    }
+    output$showModules <- renderUI({
+      selectInput("ModulesShow", "Select modules to show in heatmap and table:", choices = choices, multiple = T, selected=NULL)
+    })
+    ## __select module to modify ----
+    output$selectModules <- renderUI({
+      selectizeInput('selModule', 'Add/modify module:', choices = choicesize,
+                     options = list(create = TRUE))
+    })
+    
+    ## __select module to remove ----
+    output$removeModules <- renderUI({
+      selectInput("rmModule",label = "Remove module:", choices = choices, multiple = T, selected=NULL)
+    })
+  })
+  
+  
+  
+  ## __Add/update module ----
+  observeEvent(input$selModule, {
+    if(!input$selModule%in%names(curated$modules)){
+      output$modifyModules <- renderUI({
+        textAreaInput("writeModule",label = "Modify module:", value = "Enter genes separated by comma and click button to update")
+      })
+    }else{
+      output$modifyModules <- renderUI({
+        textAreaInput("writeModule",label = "Modify module:", value = paste0(sort(curated$modules[[input$selModule]]), collapse = ", "))
+      })
+    }
+  }, ignoreInit = T, ignoreNULL = T)
+  
+  ## Candidate genes ----
+  ## __add candidate gene ----
+  output$addCandidate <- renderUI({
+    selectInput("addGene", label=NULL, choices=sort(setdiff(dimnames(links.use())[[1]],curated$candidates)), multiple = T, selected = NULL)
+  })
+  
+  ## __remove candidate gene ----
+  output$rmCandidate <- renderUI({
+    if(is.null(curated$candidates)){
+      choices=NULL
+    }else{
+      choices=sort(curated$candidates)
+    }
+    selectInput("rmGene", label=NULL, choices=choices, multiple = T, selected = NULL)
+  })
+  
+  ## Cluster selection ----
+  ## __HC cluster ----
+  observeEvent(input$HC_cls, {
+    k=input$K
+    output$HcCls <- renderUI({
+      selectInput("selHcCls", "Select HC cluster:", choices = c("none", 1:k))
+    })
+  }, ignoreInit = T)
+  
+  ## __network cluster method ----
+  changeAlgList <- reactiveValues(change=NULL)
+  observeEvent(changeAlgList$change, {
+    if(changeAlgList$change==0){
+      output$listGraphAlg <- renderUI({
+        selectInput("selGraphAlg",
+                    label = "Select graph partition:",
+                    choices = c("none","components","walktrap","louvain","infomap","label_prop","leiden"))
+      })
+    }else{
+      updateSelectInput(session,"selGraphAlg", choices = c("none"))
+    }
+  }, ignoreInit = T)
+  
+  ## __network graph cluster ----
+  observeEvent(input$selHcCls,{
+    if(input$selHcCls!="none"){
+      changeAlgList$change <- 0
+      if(!is.null(input$selGraphAlg) && input$selGraphAlg!="none"){
+        net_list <- net_cls$df
+        net_df=net_list[[paste0("HC_",input$selHcCls)]]
+        updateSelectInput(session,"selGraphCls", choices=c("none",sort(unique(net_df[,input$selGraphAlg]))))
+      }
+    }else{
+      changeAlgList$change <- 1
+    }
+  }, ignoreNULL = T, ignoreInit = T)
+  
+  
+  observeEvent(input$selGraphAlg, {
+    if(input$selGraphAlg!="none"){
+      net_list <- net_cls$df
+      net_df=net_list[[paste0("HC_",input$selHcCls)]]
+      output$listGraphCls <- renderUI({
+        selectInput("selGraphCls", "Select network motif:", choices=c("none",sort(unique(net_df[,input$selGraphAlg]))))
+      })
+    }else{
+      output$listGraphCls <- renderUI({
+        selectInput("selGraphCls", "Select network motif:", choices=c("none"), selected = "none")
+      })
+    }
+  }, ignoreInit = T)
+  ############ page2 ##########
+  #### __tissue name----
+  tissue.nameP2 <- reactive({input$selTissueP2})
+  
+  ## __3d matrix with all evidence channels (including expression distances)----
+  links.useP2 <- reactive({
+    if(tissue.nameP2()=="Notochord"){
+      everything$all_evi.noto
+    }else if(tissue.nameP2()=="Prechordal plate"){
+      everything$all_evi.pcp
+    }
+  })
+  
+  ## __selected channels from user input ----
+  anno_useP2 <- callModule(externalGroup,"checkAnnoP2")
+  exp_useP2 <- callModule(expMetric, "checkExpP2")
+  
+  ## __gene by cell/pt matrices for visualization ----
+  # dyn.useP2 <- reactive({
+  #   if(tissue.nameP2()=="Notochord"){
+  #     if(exp_useP2()=="soft_cos_tissue"){
+  #       smth=everything$smooth_exp_noto_only
+  #     }else{
+  #       smth=everything$smooth_exp_noto
+  #     }
+  #     raw=everything$raw_exp_noto
+  #   }else if(tissue.nameP2()=="Prechordal plate"){
+  #     if(exp_useP2()=="soft_cos_tissue"){
+  #       smth=everything$smooth_exp_pcp_only
+  #     }else{
+  #       smth=everything$smooth_exp_pcp
+  #     }
+  #     raw=everything$raw_exp_pcp
+  #   }
+  #   pts=as.numeric(colnames(smth))
+  #   order_col=order(pts,decreasing = F)
+  #   plt_intv=seq(min(pts),max(pts),length.out = 100)
+  #   pts_order=pts[order_col]
+  #   pt.cut=findInterval(pts_order,plt_intv)
+  #   plt.ind=which(diff(pt.cut)!=0)+1
+  #   list("smth"=smth[,order_col],"raw"=raw[,order(as.numeric(colnames(raw)))], "plt_pt"=as.character(pts_order[plt.ind]))
+  # })
+  
+  ## Build Network ----
+  ## __Compute the adjacency matrix for network graph ----
+  
+  MatricesP2 <- eventReactive(input$net_updateP2, {
+    pathways=c("GO","HGNC","Reactome")
+    if(length(intersect(anno_useP2(), pathways)) > 1){
+      if(all(pathways %in% anno_useP2())){
+        anno_use=c("GO+HGNC+Reactome", setdiff(anno_useP2(),pathways))
+      }else if(all(c("GO","HGNC") %in% anno_useP2())){
+        anno_use=c("GO+HGNC", setdiff(anno_useP2(),c("GO","HGNC")))
+      }else if(all(c("GO","Reactome") %in% anno_useP2())){
+        anno_use=c("GO+Reactome", setdiff(anno_useP2(),c("GO","Reactome")))
+      }else if(all(c("HGNC","Reactome") %in% anno_useP2())){
+        anno_use=c("HGNC+Reactome", setdiff(anno_useP2(),c("HGNC","Reactome")))
+      }
+    }else{
+      anno_use=anno_useP2()
+    }
+    annoM=combined_scores(links.useP2(), anno_use)
+    if(input$combExpP2){
+      expM=links.useP2()[,,exp_useP2()]
+      if(input$d0P2=="0"){
+        d0=1
+      }else if(input$d0P2=="median"){
+        d0=median(expM[upper.tri(expM)])
+      }else if(input$d0P2=="mean"){
+        d0=mean(expM[upper.tri(expM)])
+      }
+      adjM=(d0-expM)*(input$alphaP2*annoM+1-input$alphaP2) ##expM contains distances, adjM contais similarities
+      adjM=adjM*(adjM>0)
+      if(input$rmNoAnnoP2){
+        adjM=adjM*(annoM>0)
+      }
+      list(adjM=adjM, annoM=annoM)
+    }else{
+      list(adjM=annoM)
+    }
+  })
+  
+  adjMP2 <- reactive(MatricesP2()$adjM)
+  
+  ## __Build network of all genes using the adjacency matrix ----
+  gP2 <- eventReactive(c(input$net_updateP2, input$frac_updateP2), {
+    adjM=adjMP2()
+    g2g(adjM,genes.use=NULL,thres=NULL,simp=T, frac=input$fracP2)
+  },
+  ignoreInit = T)
+  
+  ## Compute graph clusterings (with igraph) for genes in the selected hierarchical cluster ----
+  net_clsP2 <- reactiveValues(df=NULL)
+   
+  ## __network cluster method ----
+  output$listGraphAlgP2 <- renderUI({
+    selectInput("selGraphAlgP2",
+                label = "Select graph partition:",
+                choices = c("none","components","walktrap","louvain","leiden","infomap","label_prop","spinglass","eigen","optimal", "edge_btw","fast_greedy"))
+  })
+  
+  observeEvent(input$net_updateP2,{
+    updateSelectInput(session,"selGraphAlgP2", selected = c("none"))
+  }, ignoreInit = T) 
+  
+  ## __Reset when network parameter is updated ----
+  observeEvent(input$net_updateP2, {
+    net_clsP2$df <- NULL
+  })
+  
+  observeEvent(input$clusterP2,{
+    if(is.null(net_clsP2$df)){
+      print("Clustering...")
+      net_clsP2$df=igraph_cls(rownames(adjMP2()), adjMP2())
+      print("Cluster finished.")
+    }
+    if(!input$selGraphAlgP2%in%colnames(net_clsP2$df)){
+      if(!is.null(input$selGraphAlgP2) && input$selGraphAlgP2!="none"){
+        print("Clustering...")
+        new_cls=igraph_cls(rownames(adjMP2()), adjMP2(), method=input$selGraphAlgP2)
+        print("Cluster finished.")
+        net_clsP2$df=cbind(net_clsP2$df, new_cls)
+        net_df <- net_clsP2$df
+        updateSelectInput(session,"selGraphClsP2", choices=c("none",sort(unique(net_df[,input$selGraphAlgP2]))))
+      }
+    }
+  })
+
+  ## __network graph cluster ----
+  observeEvent(input$net_updateP2,{
+    if(!is.null(input$selGraphAlgP2) && input$selGraphAlgP2!="none"){
+        net_df=net_clsP2$df
+        updateSelectInput(session,"selGraphClsP2", choices=c("none",sort(unique(net_df[,input$selGraphAlgP2]))))
+      }
+  }, ignoreNULL = T, ignoreInit = T)
+  
+  observeEvent(input$selGraphAlgP2, {
+    if(input$selGraphAlgP2!="none"){
+      net_df=net_clsP2$df
+      if(!is.null(net_df) && input$selGraphAlgP2%in%colnames(net_df)){
+        output$listGraphClsP2 <- renderUI({
+          selectInput("selGraphClsP2", "Select network motif:", choices=c("none",sort(unique(net_df[,input$selGraphAlgP2]))))
+        })
+      }else{
+        output$listGraphClsP2 <- renderUI({
+          selectInput("selGraphClsP2", "Select network motif:", choices=c("none"), selected = "none")
+        })
+      }
+    }else{
+      output$listGraphClsP2 <- renderUI({
+        selectInput("selGraphClsP2", "Select network motif:", choices=c("none"), selected = "none")
+      })
+    }
+  }, ignoreInit = T)
+  
+  ## Generate network visualization ----
+  ## __*Reactive value storing current network that should be shown (global or sub network) ----
+  current_gP2 <- reactiveValues(nodes=NULL, edges=NULL)
+  
+  observe({
+    if(!is.null(gP2())){
+      current_gP2$nodes <- gP2()$nodes
+      current_gP2$edges <- gP2()$edges
+    }
+  })
+  
+  ## __Build visualization with visNetwork ----
+  observeEvent(c(current_gP2$nodes, current_gP2$edges), {
+    nodes <- current_gP2$nodes
+    edges <- current_gP2$edges
+    output$network_genesP2 <- renderVisNetwork({
+      visNetwork(nodes, edges) %>%
+        visExport() %>%
+        visInteraction(multiselect=T)%>%
+        visPhysics(forceAtlas2Based = list(centralGravity=0.001, damping=0.1)) %>%
+        visIgraphLayout("layout_with_mds",physics = input$physics)%>%
+        visOptions(highlightNearest = list("enabled"=T, "degree"=0)) %>%
+        visEvents(selectNode = "function(e){
+                  Shiny.onInputChange('current_node_idP2', e.nodes);
+    }")  %>%
+        visEvents(deselectNode = "function(e){
+                  Shiny.onInputChange('current_node_idP2', e.nodes);
+        }")
+      #visLegend(enabled = T, useGroups = TRUE) %>%
+  })
+    },
+  ignoreInit = F, ignoreNULL = T)
+  
+  ## __Update node colors according to graph clustering ----
+  observeEvent(input$selGraphAlgP2, {
+    if(input$selGraphAlgP2!="none"){
+      if(input$selGraphAlgP2%in%colnames(net_clsP2$df)){
+        nodes.cls = gP2()$nodes
+        nodes.cls$group=net_clsP2$df[nodes.cls$id,input$selGraphAlgP2]
+        nodes.cls$color=get.colors(max(nodes.cls$group))[nodes.cls$group]
+        visNetworkProxy("network_genesP2") %>%
+          visUpdateNodes(nodes=nodes.cls) 
+      }
+    }
+    # else{
+    #   visNetworkProxy("network_genesP2") %>%
+    #     visUpdateNodes(nodes=gP2()$nodes)
+    # }
+  },ignoreInit = T, ignoreNULL = T)
+  
+  ## __Get the genes in selected graph cluster/motif and highlight in network ----
+  observe({
+    if(!is.null(input$selGraphClsP2) && !is.null(input$selGraphAlgP2)){
+      if(input$selGraphClsP2!="none" && input$selGraphAlgP2!="none"){
+        net_df=net_clsP2$df
+        if(!is.null(net_df)&&input$selGraphAlgP2%in%colnames(net_df)){
+          genes=rownames(net_df)[which(net_df[,input$selGraphAlgP2]==as.numeric(input$selGraphClsP2))]
+          visNetworkProxy("network_genesP2") %>%
+          visSetSelection(nodesId = intersect(genes,current_gP2$nodes$id), unselectAll = T)
+        }else{
+          visNetworkProxy("network_genesP2") %>%
+            visUnselectAll()
+        }
+      }else{
+        visNetworkProxy("network_genesP2") %>%
+        visUnselectAll()
+      }
+    }
+    else{
+      visNetworkProxy("network_genesP2") %>%
+        visUnselectAll()
+    }
+  })
+  
+  observeEvent(input$save_clusterP2,{
+    if(!is.null(net_clsP2$df)){
+      write.csv(net_clsP2$df,input$save_cls_dirP2)
+    }
+  })
+  
+  ## __Cluster legend
+  output$clusLegP2 <- renderPlotly({
+    if(!is.null(input$selGraphAlgP2) && input$selGraphAlgP2!="none"){
+      net_df=net_clsP2$df
+      if(!is.null(net_df)&&input$selGraphAlgP2%in%colnames(net_df)){
+        clses=sort(unique(net_df[,input$selGraphAlgP2]),decreasing = F)
+        cols.use=get.colors(max(clses))[clses]
+        #num.col=2
+        #par(mfcol=c(ceiling(length(clses)/2),2),mar=c(0,0,0,0),oma=c(0,0,1,0))
+        num_mem=c()
+        for(cls in clses){
+          #plot(0,0,pch=16,cex=4,axes=FALSE,col=cols.use[cls],xlim = c(-1,4))
+          #text(x=1.5,y=0,cls)
+          #mtext(cls, side=4, outer=T)
+          num_mem=c(num_mem,sum(net_df[,input$selGraphAlgP2]==cls))
+        }
+        data <- data.frame(clses, num_mem)
+        plot_ly(data, x = ~clses, y = ~num_mem, type = 'bar',marker = list(color=cols.use))
+      }
+    }
+  })
+  
+  ## __Output current selection 
+  observe({
+    genes=input$current_node_idP2
+    if(length(genes)==0){
+      if(!is.null(input$selGraphAlgP2) && input$selGraphAlgP2!="none"){
+        net_df=net_clsP2$df
+        if(!is.null(net_df)&&input$selGraphAlgP2%in%colnames(net_df)){
+          genes=rownames(net_df)[which(net_df[,input$selGraphAlgP2]==as.numeric(input$selGraphClsP2))]
+        }
+      }
+    }
+    output$current_selP2 <- renderText({
+      paste("Genes in current selection:", paste0(genes,collapse = ", "))
+    })
+  })
+}
+
+shinyApp(ui = ui, server = server)

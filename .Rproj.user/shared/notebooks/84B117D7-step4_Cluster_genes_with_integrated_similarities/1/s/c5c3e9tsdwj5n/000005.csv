@@ -1,0 +1,34 @@
+"1","Retrieving notices: ...working... "
+"1","done
+"
+"1","Collecting package metadata (current_repodata.json): ...working... "
+"1","done
+"
+"1","Solving environment: ...working... "
+"1","done
+"
+"2","
+
+==> WARNING: A newer version of conda exists. <==
+  current version: 23.1.0
+  latest version: 24.5.0
+
+Please update conda by running
+
+    $ conda update -n base -c defaults conda
+
+Or to minimize the number of packages updated during conda update use
+
+     conda install conda=24.5.0
+
+
+"
+"1","
+# All requested packages already installed.
+
+"
+"1","[1]"
+"1"," ""keratin filament"""
+"1","
+"
+"0","source(""../functions/MIMIR_obj.R"")"

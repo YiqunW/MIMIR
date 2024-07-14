@@ -1,0 +1,6 @@
+"0","pcp.markers <- markersAUCPR_segs(object, group_id=""pcp_matched_windows"", 
+                                  cells.in.lineage=pcp.cells, bg.cells=nonaxial.cells, 
+                                  effect.size=0.25, frac.must.express=0.1, thres_factor=1, max.auc=Inf)
+"
+"2","2024-07-09 16:44:40: calculating markers for 1 out of 7 segments.
+"

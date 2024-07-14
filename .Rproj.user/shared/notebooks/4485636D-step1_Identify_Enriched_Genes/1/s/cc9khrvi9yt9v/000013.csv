@@ -1,0 +1,4 @@
+"0","object <- add_seg_id(object, seg_tbl,new_group = ""time.windows"")
+plotTree(object,""time.windows"",legend = F)
+"
+"2","`guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> = ""none"")` instead."

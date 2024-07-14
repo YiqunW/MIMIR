@@ -1,0 +1,4 @@
+"0","fig <- plotly_scatter(metric_tbl, x=""msigdb_c3_median(-logP)"", y=""intra_mean_exp_cor"",color=""n_cluster"", hover_text = ""similarity"", "
+"0","               color_pal = 'viridis', marker_size = 8)"
+"0","fig %>% add_trace(type = 'scatter', mode = 'markers', x = bestxy[1], y = bestxy[2],color='',"
+"0","                  marker = list(size = 12, symbol = 'circle-open', color=""coral""), showlegend = FALSE)"

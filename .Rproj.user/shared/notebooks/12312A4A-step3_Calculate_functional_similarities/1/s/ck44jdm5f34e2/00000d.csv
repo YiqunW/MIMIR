@@ -1,0 +1,5 @@
+"0","reac.p2c <- read.table(""../example_data/ReactomePathwaysRelation.txt"")"
+"0","colnames(reac.p2c) <- c(""parent"",""child"")"
+"0","## keep human (HSA) annotations"
+"0","reac.p2c <- reac.p2c[grep(""HSA"",reac.p2c$parent),]#2555 left"
+"0","head(reac.p2c)"

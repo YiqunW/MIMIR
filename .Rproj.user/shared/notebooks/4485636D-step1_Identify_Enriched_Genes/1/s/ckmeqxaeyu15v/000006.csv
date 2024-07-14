@@ -1,0 +1,10 @@
+"0","pcp.markers.good <- lapply(pcp.markers, function(x) {
+  x[x$AUCPR.ratio >= 2 & (x$nTrans-x$nTrans_rest) >= 0.3,]
+})
+names(pcp.markers.good)=names(pcp.markers)
+pcp.markers.2.fc3.2x <- names(which(table(unlist(lapply(pcp.markers.good, rownames))) > 1))
+pcp.markers.2.fc3.last <- rownames(pcp.markers.good[[sort(names(noto.markers.good), decreasing=T)[1]]])
+"
+"2","Error in h(simpleError(msg, call)) : 
+  error in evaluating the argument 'x' in selecting a method for function 'rownames': attempt to select less than one element in get1index
+"

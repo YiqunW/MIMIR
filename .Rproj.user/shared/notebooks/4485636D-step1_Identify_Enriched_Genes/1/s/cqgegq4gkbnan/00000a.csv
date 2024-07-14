@@ -1,0 +1,23 @@
+"0","stages.consider <- list(""12-14""=c(""12h"", ""14h""), ""16-18""= c(""16h"", ""18h""), ""20-24"" = c(""20h"", ""24h"")) 
+bushra.full@group.ids['stages_use']=""not.assigned""
+for(s in names(stages.consider)){
+  cells.s=which(bushra.full@group.ids[,'stage']%in%stages.consider[[s]])
+  bushra.full@group.ids[cells.s,'stages_use']=s
+}
+
+# calculate markers for each combined stage
+late.bg.cells = cellsInCluster(bushra.full, 'cell.type', 'Others')
+noto.markers <- markersAUCPR_segs(bushra.full, group_id=""stages_use"", cells.in.lineage=late.noto.cells, bg.cells=late.bg.cells, 
+                                  effect.size=0.25, frac.must.express=0.1, thres_factor=1, max.auc=Inf)
+"
+"2","2024-07-09 14:27:46: calculating markers for 1 out of 3 segments.
+"
+"2","2024-07-09 14:44:07: calculating markers for 2 out of 3 segments.
+"
+"2","2024-07-09 14:58:04: calculating markers for 3 out of 3 segments.
+"
+"0","pcp.markers <- markersAUCPR_segs(object, group_id=""stages_use"", cells.in.lineage=late.pcp.cells, bg.cells=late.bg.cells, "
+"0","                                  effect.size=0.25, frac.must.express=0.1, thres_factor=1, max.auc=Inf)"
+"2","Error in h(simpleError(msg, call)) : 
+  error in evaluating the argument 'x' in selecting a method for function 'unique': undefined columns selected
+"

@@ -1,0 +1,13 @@
+"0","print(paste0(""# notochord enriched genes: "",length(noto.genes)))
+"
+"1","[1]"
+"1"," ""# notochord enriched genes: 806"""
+"1","
+"
+"0","print(paste0(""# hatching gland enriched genes: "",length(pcp.genes)))"
+"1","[1]"
+"1"," ""# hatching gland enriched genes: 802"""
+"1","
+"
+"0","write(pcp.genes, file=""../example_results/genes.pcp.txt"")"
+"0","write(noto.genes, file=""../example_results/genes.noto.txt"")"

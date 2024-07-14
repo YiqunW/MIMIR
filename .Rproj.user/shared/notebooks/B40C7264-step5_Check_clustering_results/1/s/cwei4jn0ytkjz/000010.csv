@@ -1,0 +1,7 @@
+"0","fig <- plotly_scatter(metric_tbl, x=""msigdb_c3_median(-logP)"", y=""intra_mean_exp_cor"",color=""AMI"", hover_text = ""similarity"", 
+               color_pal = 'viridis', marker_size = 7, figsize = c(500,350))
+"
+"2","Specifying width/height in layout() is now deprecated.
+Please specify in ggplotly() or plot_ly()"
+"0","fig %>% add_trace(type = 'scatter', mode = 'markers', x = bestxy[1], y = bestxy[2],color='',"
+"0","                  marker = list(size = 12, symbol = 'circle-open', color=""coral""), showlegend = FALSE)"

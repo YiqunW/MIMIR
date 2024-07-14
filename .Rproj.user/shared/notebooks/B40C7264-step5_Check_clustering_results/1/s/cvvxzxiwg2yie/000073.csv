@@ -1,0 +1,5 @@
+"0","plotly_scatter(noto.obj@cluster_metrics, x=""n_cluster"", y=""max_cluster"",color=""similarity_mode"", hover_text = ""similarity"", 
+               addline_x = 150, addline_y = 150, figsize = c(500,400)) 
+"
+"2","Specifying width/height in layout() is now deprecated.
+Please specify in ggplotly() or plot_ly()"

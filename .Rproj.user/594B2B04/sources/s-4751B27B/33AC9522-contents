@@ -1,0 +1,316 @@
+---
+title: 'Step3: Calculate functional similarities'
+author: "Yiqun Wang"
+output: github_document
+---
+In this example, we will calculate the functional similarities between enriched genes identified from step 1 in the zebrafish notochord and hatching gland. Several functional annotation databases will be used, including Gene Ontology, Reactome, Interprot, HGNC, and STRING. 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+source("../functions/functional_similarity_calculations.R")
+```
+
+## 
+```{r}
+noto.genes=scan("../../",what="character")
+pcp.genes=scan(directory$genes_pcp,what="character")
+bg.genes=scan(directory$genes_bg,what="character")
+```
+
+## Calculate annotation similarities
+## Gather annotation similarity matrices
+```{r}
+anno.sim.pcp=array(0,dim=c(length(pcp.genes),length(pcp.genes),1),
+                        dimnames = list(pcp.genes, pcp.genes, "string"))
+anno.sim.noto=array(0,dim=c(length(noto.genes),length(noto.genes),1),
+                        dimnames = list(noto.genes, noto.genes, "string"))
+anno.matrix.pcp=matrix(0, nrow = length(pcp.genes),ncol = length(pcp.genes),dimnames =  list(pcp.genes, pcp.genes))
+anno.matrix.noto=matrix(0, nrow = length(noto.genes),ncol = length(noto.genes),dimnames =  list(noto.genes, noto.genes))
+
+#### STRING ####
+str_zf_pair=read.csv("../example_data/string_table_GeneSymbol_sep_2021.csv",stringsAsFactors = F,row.names = 1)
+scores_use=c("combined_score", "combined_less", "combined_more", "combined_noDB", "combined_exp_txt")
+str_score.matrices=list()
+## format into symetric matrices
+ind1=which(str_zf_pair$gene1%in%union(pcp.genes,noto.genes))
+ind2=which(str_zf_pair$gene2%in%union(pcp.genes,noto.genes))
+str_axial_ind=intersect(ind1,ind2)
+for(chan in scores_use){
+  str_score.matrices[[chan]]=str_ppi_2tbl(str_zf_pair[str_axial_ind,],thres = 0,values = chan,g1.col="gene1", g2.col="gene2",method="max")
+}
+for(chan in scores_use){
+  str_score.matrices[[chan]]=str_score.matrices[[chan]]/1000
+}
+## add each to the 3d array
+## original string score
+anno.matrix.add=str_score.matrices$combined_score
+g.comm = intersect(colnames(anno.matrix.noto),colnames(anno.matrix.add))
+anno.sim.noto[g.comm,g.comm,'string']=anno.matrix.add[g.comm,g.comm]
+
+g.comm = intersect(colnames(anno.matrix.pcp),colnames(anno.matrix.add))
+anno.sim.pcp[g.comm,g.comm,'string']=anno.matrix.add[g.comm,g.comm]
+
+## exp, database, textmining
+anno.matrix.add=str_score.matrices$combined_less
+g.comm = intersect(colnames(anno.matrix.noto),colnames(anno.matrix.add))
+string_fewer=anno.matrix.noto
+string_fewer[g.comm,g.comm]=anno.matrix.add[g.comm,g.comm]
+anno.sim.noto=abind(anno.sim.noto, string_fewer, make.names=T)
+
+g.comm = intersect(colnames(anno.matrix.pcp),colnames(anno.matrix.add))
+string_fewer=anno.matrix.pcp
+string_fewer[g.comm,g.comm]=anno.matrix.add[g.comm,g.comm]
+anno.sim.pcp=abind(anno.sim.pcp, string_fewer, make.names=T)
+
+## fusion, cooccurence, coexpression, experiments, database, textmining (all except neighborhood)
+anno.matrix.add=str_score.matrices$combined_more
+g.comm = intersect(colnames(anno.matrix.noto),colnames(anno.matrix.add))
+string_more=anno.matrix.noto
+string_more[g.comm,g.comm]=anno.matrix.add[g.comm,g.comm]
+anno.sim.noto=abind(anno.sim.noto, string_more, make.names=T)
+
+g.comm = intersect(colnames(anno.matrix.pcp),colnames(anno.matrix.add))
+string_more=anno.matrix.pcp
+string_more[g.comm,g.comm]=anno.matrix.add[g.comm,g.comm]
+anno.sim.pcp=abind(anno.sim.pcp, string_more, make.names=T)
+
+## fusion, cooccurence, coexpression, experiments, textmining (all except neighborhood and database)
+anno.matrix.add=str_score.matrices$combined_noDB
+g.comm = intersect(colnames(anno.matrix.noto),colnames(anno.matrix.add))
+string_noDB=anno.matrix.noto
+string_noDB[g.comm,g.comm]=anno.matrix.add[g.comm,g.comm]
+anno.sim.noto=abind(anno.sim.noto, string_noDB, make.names=T)
+
+g.comm = intersect(colnames(anno.matrix.pcp),colnames(anno.matrix.add))
+string_noDB=anno.matrix.pcp
+string_noDB[g.comm,g.comm]=anno.matrix.add[g.comm,g.comm]
+anno.sim.pcp=abind(anno.sim.pcp, string_noDB, make.names=T)
+
+## experiments and textmining
+anno.matrix.add=str_score.matrices$combined_exp_txt
+g.comm = intersect(colnames(anno.matrix.noto),colnames(anno.matrix.add))
+string_ExpTxt=anno.matrix.noto
+string_ExpTxt[g.comm,g.comm]=anno.matrix.add[g.comm,g.comm]
+anno.sim.noto=abind(anno.sim.noto, string_ExpTxt, make.names=T)
+
+g.comm = intersect(colnames(anno.matrix.pcp),colnames(anno.matrix.add))
+string_ExpTxt=anno.matrix.pcp
+string_ExpTxt[g.comm,g.comm]=anno.matrix.add[g.comm,g.comm]
+anno.sim.pcp=abind(anno.sim.pcp, string_ExpTxt, make.names=T)
+
+#### sematic similarity of GO, Reactome, Interprot protein domain and HGNC ####
+sem.sim <- readRDS("~/Dropbox/ShinyNet/Gene_Net_ext/data/SemanticSimilarities_Sep2021.rds")
+sem.sim.hgnc <- readRDS("~/Dropbox/ShinyNet/Gene_Net_ext/data/SemanticSimilarities(HGNC)_Sep2021.rds")
+```
+
+## Adjust scores with prior
+```{r}
+## adjust the score to account for similarities between random pairs (Use background gene average).
+## GO
+adj.prior <- function(anno.matrix.add, anno.matrix.noto, bg.genes, return_ave=F){
+  g.comm = intersect(colnames(anno.matrix.noto),colnames(anno.matrix.add))
+  go_bp=anno.matrix.noto
+  go_bp[g.comm,g.comm]=anno.matrix.add[g.comm,g.comm]
+  all.genes=union(intersect(bg.genes,rownames(anno.matrix.add)),g.comm)
+  bg.m=anno.matrix.add[all.genes,all.genes]
+  bg.ave=mean(bg.m[upper.tri(bg.m)])
+  if(return_ave){return(bg.ave)}
+  go_bp=go_bp-bg.ave
+  go_bp=go_bp*(go_bp>0)
+  return(go_bp)
+}
+
+anno.matrix.add=sem.sim$GO$similarity$BP
+go_bp=adj.prior(anno.matrix.add, anno.matrix.noto, bg.genes)
+anno.sim.noto=abind(anno.sim.noto, go_bp, make.names=T)
+
+go_bp=adj.prior(anno.matrix.add, anno.matrix.pcp, bg.genes)
+anno.sim.pcp=abind(anno.sim.pcp, go_bp, make.names=T)
+
+anno.matrix.add=sem.sim$GO$similarity$MF
+go_mf=adj.prior(anno.matrix.add, anno.matrix.noto, bg.genes)
+anno.sim.noto=abind(anno.sim.noto, go_mf, make.names=T)
+
+go_mf=adj.prior(anno.matrix.add, anno.matrix.pcp, bg.genes)
+anno.sim.pcp=abind(anno.sim.pcp, go_mf, make.names=T)
+
+anno.matrix.add=sem.sim$GO$similarity$CC
+go_cc=adj.prior(anno.matrix.add, anno.matrix.noto, bg.genes)
+anno.sim.noto=abind(anno.sim.noto, go_cc, make.names=T)
+
+go_cc=adj.prior(anno.matrix.add, anno.matrix.pcp, bg.genes)
+anno.sim.pcp=abind(anno.sim.pcp, go_cc, make.names=T)
+
+## reactome
+anno.matrix.add=sem.sim$Reactome$similarity
+reactome=adj.prior(anno.matrix.add, anno.matrix.noto, bg.genes)
+anno.sim.noto=abind(anno.sim.noto, reactome, make.names=T)
+
+reactome=adj.prior(anno.matrix.add, anno.matrix.pcp, bg.genes)
+anno.sim.pcp=abind(anno.sim.pcp, reactome, make.names=T)
+
+## Interprot
+anno.matrix.add=sem.sim$Interprot$similarity
+interprot=adj.prior(anno.matrix.add, anno.matrix.noto, bg.genes)
+anno.sim.noto=abind(anno.sim.noto, interprot, make.names=T)
+
+interprot=adj.prior(anno.matrix.add, anno.matrix.pcp, bg.genes)
+anno.sim.pcp=abind(anno.sim.pcp, interprot, make.names=T)
+
+## HGNC
+anno.matrix.add=sem.sim.hgnc$similarity
+hgnc=adj.prior(anno.matrix.add, anno.matrix.noto, bg.genes)
+anno.sim.noto=abind(anno.sim.noto, hgnc, make.names=T)
+
+hgnc=adj.prior(anno.matrix.add, anno.matrix.pcp, bg.genes)
+anno.sim.pcp=abind(anno.sim.pcp, hgnc, make.names=T)
+
+### save annotation similarities
+save_dir="~/Dropbox/ShinyNet/Gene_Net_ext/data/axial_similarities/"
+saveRDS(anno.sim.noto,paste0(save_dir,"functional_sim_noto_paper.rds"))
+saveRDS(anno.sim.pcp,paste0(save_dir,"functional_sim_pcp_paper.rds"))
+
+anno.sim.noto=readRDS(paste0(save_dir,"functional_sim_noto_paper.rds"))
+anno.sim.pcp=readRDS(paste0(save_dir,"functional_sim_pcp_paper.rds"))
+
+## adjust the string scores by subtracting priors (average of all axial and background genes)
+str.priors=apply(str_zf_pair[,c("combined_score", "combined_less", "combined_more", "combined_noDB", "combined_exp_txt")],2,mean)/1000
+anno.sim.noto.adj.prior=anno.sim.noto
+anno.sim.pcp.adj.prior=anno.sim.pcp
+
+new_name=c('string', 'string_fewer', 'string_more', 'string_noDB', 'string_ExpTxt')
+old_name=c("combined_score", "combined_less", "combined_more", "combined_noDB", "combined_exp_txt")
+for(i in 1:length(old_name)){
+  chan=new_name[i]
+  chan_o=old_name[i]
+  anno.sim.noto.adj.prior[,,chan]=anno.sim.noto[,,chan]-str.priors[chan_o]
+  anno.sim.noto.adj.prior[,,chan]=anno.sim.noto.adj.prior[,,chan]*(anno.sim.noto.adj.prior[,,chan]>0)
+  anno.sim.pcp.adj.prior[,,chan]=anno.sim.pcp[,,chan]-str.priors[chan_o]
+  anno.sim.pcp.adj.prior[,,chan]=anno.sim.pcp.adj.prior[,,chan]*(anno.sim.pcp.adj.prior[,,chan]>0)
+}
+```
+
+### save prior adjusted annotation similarities
+```{r}
+save_dir="~/Dropbox/ShinyNet/Gene_Net_ext/data/axial_similarities/"
+saveRDS(anno.sim.noto.adj.prior,paste0(save_dir,"functional_sim_noto_prior_paper.rds"))
+saveRDS(anno.sim.pcp.adj.prior,paste0(save_dir,"functional_sim_pcp_prior_paper.rds"))
+
+anno.sim.noto.adj.prior=readRDS(paste0(save_dir,"functional_sim_noto_prior_paper.rds"))
+anno.sim.pcp.adj.prior=readRDS(paste0(save_dir,"functional_sim_pcp_prior_paper.rds"))
+```
+
+## Combine individual annotation sources (to combine with expression similarities)
+```{r}
+combined_scores <- function(all_links, channel.use, prior=NULL){
+  if(length(channel.use)==1){
+    if(is.null(prior)){
+      return(all_links[,,channel.use])
+    }else{
+      adj.M=all_links[,,channel.use]-prior
+      return(adj.M*(adj.M>0))
+    }
+  }else{
+    if(is.null(prior)){
+      return(apply(all_links[,,channel.use],c(1,2),function(x) 1-prod(1-x)))
+    }else{
+      adj.M=all_links[,,channel.use]-prior
+      adj.M=adj.M*(adj.M>0)
+      return(apply(adj.M,c(1,2),function(x) 1-prod(1-x)))
+    }
+  }
+}
+```
+
+```{r}
+anno.channels=c("string", "string_fewer", "string_more", "string_noDB+GO+Reactome+Interpro", 
+                "string_ExpTxt+GO+Reactome+Interpro", "string_noDB+GO+Reactome+Interpro+HGNC",
+                "string_ExpTxt+GO+Reactome+Interpro+HGNC", "string_noDB+GO(noCC)+Reactome+Interpro",
+                "string_ExpTxt+GO(noCC)+Reactome+Interpro", "GO", "GO(noCC)",
+                "string_ExpTxt+GO(noCC)+Reactome+Interpro+HGNC", "GO+Reactome+Interpro",
+                "GO+Reactome+Interpro+HGNC", "GO(noCC)+Reactome+Interpro", 
+                "GO(noCC)+Reactome+Interpro+HGNC", 
+                "string_noDB+GO+Reactome", "string_ExpTxt+GO+Reactome", "string_noDB+GO+Reactome+HGNC",
+                "string_ExpTxt+GO+Reactome+HGNC", "string_noDB+GO(noCC)+Reactome",
+                "string_ExpTxt+GO(noCC)+Reactome", "string_ExpTxt+GO(noCC)+Reactome+HGNC",
+                "GO+Reactome+HGNC", "GO(noCC)+Reactome+HGNC")
+
+anno.sim.pcp.use=array(0,dim=c(length(pcp.genes),length(pcp.genes),length(anno.channels)),
+                        dimnames = list(pcp.genes, pcp.genes, anno.channels))
+anno.sim.noto.use=array(0,dim=c(length(noto.genes),length(noto.genes),length(anno.channels)),
+                        dimnames = list(noto.genes, noto.genes, anno.channels))
+
+anno.sim.pcp.use[,,c("string", "string_fewer", "string_more")]=anno.sim.pcp[,,c("string", "string_fewer", "string_more")] #stand alone string scores are not prior adjusted (priors added back during combined score calculaion according to string protocol)
+anno.sim.noto.use[,,c("string", "string_fewer", "string_more")]=anno.sim.noto[,,c("string", "string_fewer", "string_more")]
+
+## combine annotation semantic similarities with string scores
+anno.sim.pcp.use[,,"string_noDB+GO+Reactome+Interpro"]=combined_scores(anno.sim.pcp.adj.prior, c("string_noDB","go_bp", "go_mf", "go_cc", "reactome", "interprot"), prior=NULL)
+anno.sim.noto.use[,,"string_noDB+GO+Reactome+Interpro"]=combined_scores(anno.sim.noto.adj.prior, c("string_noDB","go_bp", "go_mf", "go_cc", "reactome", "interprot"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_ExpTxt+GO+Reactome+Interpro"]=combined_scores(anno.sim.pcp.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "go_cc", "reactome", "interprot"), prior=NULL)
+anno.sim.noto.use[,,"string_ExpTxt+GO+Reactome+Interpro"]=combined_scores(anno.sim.noto.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "go_cc", "reactome", "interprot"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_noDB+GO+Reactome+Interpro+HGNC"]=combined_scores(anno.sim.pcp.adj.prior, c("string_noDB","go_bp", "go_mf", "go_cc", "reactome", "interprot", "hgnc"), prior=NULL)
+anno.sim.noto.use[,,"string_noDB+GO+Reactome+Interpro+HGNC"]=combined_scores(anno.sim.noto.adj.prior, c("string_noDB","go_bp", "go_mf", "go_cc", "reactome", "interprot", "hgnc"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_ExpTxt+GO+Reactome+Interpro+HGNC"]=combined_scores(anno.sim.pcp.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "go_cc", "reactome", "interprot", "hgnc"), prior=NULL)
+anno.sim.noto.use[,,"string_ExpTxt+GO+Reactome+Interpro+HGNC"]=combined_scores(anno.sim.noto.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "go_cc", "reactome", "interprot", "hgnc"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_noDB+GO(noCC)+Reactome+Interpro"]=combined_scores(anno.sim.pcp.adj.prior, c("string_noDB","go_bp", "go_mf", "reactome", "interprot"), prior=NULL)
+anno.sim.noto.use[,,"string_noDB+GO(noCC)+Reactome+Interpro"]=combined_scores(anno.sim.noto.adj.prior, c("string_noDB","go_bp", "go_mf", "reactome", "interprot"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_ExpTxt+GO(noCC)+Reactome+Interpro"]=combined_scores(anno.sim.pcp.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "reactome", "interprot"), prior=NULL)
+anno.sim.noto.use[,,"string_ExpTxt+GO(noCC)+Reactome+Interpro"]=combined_scores(anno.sim.noto.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "reactome", "interprot"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_ExpTxt+GO(noCC)+Reactome+Interpro+HGNC"]=combined_scores(anno.sim.pcp.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "reactome", "interprot","hgnc"), prior=NULL)
+anno.sim.noto.use[,,"string_ExpTxt+GO(noCC)+Reactome+Interpro+HGNC"]=combined_scores(anno.sim.noto.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "reactome", "interprot","hgnc"), prior=NULL)
+
+## combine annotation semantic similarities: "GO", "GO(noCC)"
+anno.sim.pcp.use[,,"GO(noCC)"]=combined_scores(anno.sim.pcp.adj.prior, c("go_bp", "go_mf"), prior=NULL)
+anno.sim.noto.use[,,"GO(noCC)"]=combined_scores(anno.sim.noto.adj.prior, c("go_bp", "go_mf"), prior=NULL)
+
+anno.sim.pcp.use[,,"GO"]=combined_scores(anno.sim.pcp.adj.prior, c("go_bp", "go_mf", "go_cc"), prior=NULL)
+anno.sim.noto.use[,,"GO"]=combined_scores(anno.sim.noto.adj.prior, c("go_bp", "go_mf", "go_cc"), prior=NULL)
+
+anno.sim.pcp.use[,,"GO+Reactome+Interpro"]=combined_scores(anno.sim.pcp.adj.prior, c("go_bp", "go_mf", "go_cc","reactome", "interprot"), prior=NULL)
+anno.sim.noto.use[,,"GO+Reactome+Interpro"]=combined_scores(anno.sim.noto.adj.prior, c("go_bp", "go_mf", "go_cc","reactome", "interprot"), prior=NULL)
+
+anno.sim.pcp.use[,,"GO+Reactome+Interpro+HGNC"]=combined_scores(anno.sim.pcp.adj.prior, c("go_bp", "go_mf", "go_cc","reactome", "interprot","hgnc"), prior=NULL)
+anno.sim.noto.use[,,"GO+Reactome+Interpro+HGNC"]=combined_scores(anno.sim.noto.adj.prior, c("go_bp", "go_mf", "go_cc","reactome", "interprot","hgnc"), prior=NULL)
+
+anno.sim.pcp.use[,,"GO(noCC)+Reactome+Interpro"]=combined_scores(anno.sim.pcp.adj.prior, c("go_bp", "go_mf", "reactome", "interprot"), prior=NULL)
+anno.sim.noto.use[,,"GO(noCC)+Reactome+Interpro"]=combined_scores(anno.sim.noto.adj.prior, c("go_bp", "go_mf", "reactome", "interprot"), prior=NULL)
+
+anno.sim.pcp.use[,,"GO(noCC)+Reactome+Interpro+HGNC"]=combined_scores(anno.sim.pcp.adj.prior, c("go_bp", "go_mf", "reactome", "interprot","hgnc"), prior=NULL)
+anno.sim.noto.use[,,"GO(noCC)+Reactome+Interpro+HGNC"]=combined_scores(anno.sim.noto.adj.prior, c("go_bp", "go_mf", "reactome", "interprot","hgnc"), prior=NULL)
+
+## combine similarities without interprot
+anno.sim.pcp.use[,,"string_noDB+GO+Reactome"]=combined_scores(anno.sim.pcp.adj.prior, c("string_noDB","go_bp", "go_mf", "go_cc", "reactome"), prior=NULL)
+anno.sim.noto.use[,,"string_noDB+GO+Reactome"]=combined_scores(anno.sim.noto.adj.prior, c("string_noDB","go_bp", "go_mf", "go_cc", "reactome"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_ExpTxt+GO+Reactome"]=combined_scores(anno.sim.pcp.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "go_cc", "reactome"), prior=NULL)
+anno.sim.noto.use[,,"string_ExpTxt+GO+Reactome"]=combined_scores(anno.sim.noto.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "go_cc", "reactome"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_noDB+GO+Reactome+HGNC"]=combined_scores(anno.sim.pcp.adj.prior, c("string_noDB","go_bp", "go_mf", "go_cc", "reactome", "hgnc"), prior=NULL)
+anno.sim.noto.use[,,"string_noDB+GO+Reactome+HGNC"]=combined_scores(anno.sim.noto.adj.prior, c("string_noDB","go_bp", "go_mf", "go_cc", "reactome", "hgnc"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_ExpTxt+GO+Reactome+HGNC"]=combined_scores(anno.sim.pcp.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "go_cc", "reactome", "hgnc"), prior=NULL)
+anno.sim.noto.use[,,"string_ExpTxt+GO+Reactome+HGNC"]=combined_scores(anno.sim.noto.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "go_cc", "reactome", "hgnc"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_noDB+GO(noCC)+Reactome"]=combined_scores(anno.sim.pcp.adj.prior, c("string_noDB","go_bp", "go_mf", "reactome"), prior=NULL)
+anno.sim.noto.use[,,"string_noDB+GO(noCC)+Reactome"]=combined_scores(anno.sim.noto.adj.prior, c("string_noDB","go_bp", "go_mf", "reactome"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_ExpTxt+GO(noCC)+Reactome"]=combined_scores(anno.sim.pcp.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "reactome"), prior=NULL)
+anno.sim.noto.use[,,"string_ExpTxt+GO(noCC)+Reactome"]=combined_scores(anno.sim.noto.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "reactome"), prior=NULL)
+
+anno.sim.pcp.use[,,"string_ExpTxt+GO(noCC)+Reactome+HGNC"]=combined_scores(anno.sim.pcp.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "reactome", "hgnc"), prior=NULL)
+anno.sim.noto.use[,,"string_ExpTxt+GO(noCC)+Reactome+HGNC"]=combined_scores(anno.sim.noto.adj.prior, c("string_ExpTxt","go_bp", "go_mf", "reactome",  "hgnc"), prior=NULL)
+
+anno.sim.pcp.use[,,"GO(noCC)+Reactome+HGNC"]=combined_scores(anno.sim.pcp.adj.prior, c("go_bp", "go_mf", "reactome", "hgnc"), prior=NULL)
+anno.sim.noto.use[,,"GO(noCC)+Reactome+HGNC"]=combined_scores(anno.sim.noto.adj.prior, c("go_bp", "go_mf", "reactome", "hgnc"), prior=NULL)
+
+anno.sim.pcp.use[,,"GO+Reactome+HGNC"]=combined_scores(anno.sim.pcp.adj.prior, c("go_bp", "go_mf", "go_cc","reactome", "hgnc"), prior=NULL)
+anno.sim.noto.use[,,"GO+Reactome+HGNC"]=combined_scores(anno.sim.noto.adj.prior, c("go_bp", "go_mf", "go_cc","reactome", "hgnc"), prior=NULL)
+```

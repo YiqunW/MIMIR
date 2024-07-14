@@ -1,0 +1,2 @@
+"0","module_subset=read.csv(""../example_data/curated_subset300.csv"",stringsAsFactors = F)"
+"0","head(module_subset)"

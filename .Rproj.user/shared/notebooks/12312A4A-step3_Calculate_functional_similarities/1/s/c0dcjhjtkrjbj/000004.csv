@@ -1,0 +1,7 @@
+"0","
+hg.obj <- readRDS(""../example_results/hg_mimir.rds"")
+hg.obj <- add_to_MIMIR(hg.obj,anno.sim.hg)
+"
+"2","Error in add_to_MIMIR(hg.obj, anno.sim.hg) : 
+  object 'anno.sim.hg' not found
+"

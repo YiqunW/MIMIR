@@ -1,0 +1,38 @@
+MIMIR <- methods::setClass("MIMIR", 
+                           slots = c(name="character",
+                                     exp.data = "data.frame",
+                                     smoothed.exp = "data.frame",
+                                     genes = "vector",
+                                     pseudotime = "vector",
+                                     exp.sim = "array",
+                                     func.sim = "array",
+                                     integrated.sim = "array",
+                                     clusters = "list",
+                                     annotations = "list"
+                                     ))
+
+setMethod(f = "show", signature = "MIMIR",
+          definition = function(object) {
+            cat("MIMIR object: ",
+                name, ". ",
+                nrow(object@exp.data), " genes x",
+                ncol(object@exp.data), "cells.\n")
+            invisible(NULL)
+            }
+          )
+
+createMIMIR <- function(name, exp.data, genes = NULL, pseudotime = NULL) {
+  if(is.null(genes)){
+    genes=rownames(exp.data)
+  }else{
+    genes=intersect(genes,rownames(exp.data))
+  }
+  if(is.null(pseudotime)){
+    pseudotime=colnames(exp.data)
+  }else{
+    pseudotime=intersect(as.character(pseudotime), colnames(exp.data))
+  }
+  exp.data=exp.data[genes, pseudotime]
+  object <- methods::new("MIMIR", name=name, exp.data=exp.data, genes=genes)
+  return(object)
+} 

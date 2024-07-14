@@ -1,0 +1,507 @@
+## function for visualizing expression dynamics
+ribbon_genes2 <- function(geneBycell,window.sz=0.01,col="green",label=NULL, new.plot=NULL, alpha=0.6){
+  ## geneBycell is a matrix whose column names are the pseudotimes of each cell
+  pt=as.numeric(colnames(geneBycell))
+  x=seq(min(pt), max(pt), by = window.sz)
+  x=seq(min(pt),max(pt),length.out = length(x)) #to take care of end section problem
+  binnedExp=matrix(0, nrow = dim(geneBycell)[1], ncol = length(x)-1)
+  for(i in 1:length(x)-1){
+    pt_use=pt[intersect(which(pt>=x[i]),which(pt<=x[i+1]))]
+    M=geneBycell[,as.character(pt_use),drop=F]
+    binnedExp[,i]=log2(apply(2^M-1,1,mean)+1)
+  }
+  ys=apply(binnedExp,2, function(x) quantile(x,na.rm=T))
+  colnames(ys)=x[1:(length(x)-1)]+window.sz
+  na.ind=which(is.na(apply(ys,2,sum)))
+  if(length(na.ind)>0){
+    ys=ys[c("25%","50%","75%"),-na.ind]
+  }else{
+    ys=ys[c("25%","50%","75%"),]
+  }
+  if(is.null(new.plot)){
+    p = plot_ly() %>% 
+      add_lines(x=colnames(ys), y=ys[2,],line = list(color=col), name = label) %>%
+      add_ribbons(x=colnames(ys), ymin=ys[1,], ymax=ys[3,],fillcolor=col,opacity = alpha,line=list(width=0), name=label , showlegend = FALSE) %>%
+      layout(xaxis=list(tick0=0,dtick=0.1,type="linear"))
+  }else{
+    p = new.plot %>%
+      add_lines(x=colnames(ys), y=ys[2,],line = list(color=col), name = label) %>%
+      add_ribbons(x=colnames(ys), ymin=ys[1,], ymax=ys[3,],fillcolor=col,opacity = alpha,line=list(width=0), name=label , showlegend = FALSE) %>%
+      layout(xaxis=list(tick0=0,dtick=0.1,type="linear"))
+  }
+  return(p)
+}
+
+plot_genes <- function(genes, geneByPt, scale=FALSE, scale_max=5){
+  genes=intersect(genes, rownames(geneByPt))
+  if(length(genes)==0){
+    stop("Input genes not found in the provided data matrix.")
+  }
+  if(scale){
+    geneByPt=sweep(geneByPt,1,apply(geneByPt,1,min),"-")
+    geneByPt=sweep(geneByPt,1,apply(geneByPt,1,max),"/")*scale_max
+  }
+  p=plot_ly(x = as.numeric(colnames(geneByPt)), y = as.numeric(geneByPt[genes[1],]), name = genes[1], type = 'scatter', mode = 'lines+markers')
+  if(length(genes)>1){
+    for(i in 2:length(genes)){
+      p=p %>%
+        add_trace(y = as.numeric(geneByPt[genes[i],]), name = genes[i], mode = 'lines+markers')
+    }
+  }
+  return(p)
+}
+
+ribbon_genes <- function(gene.member, geneByPt, col=NULL, scale=TRUE, scale_max=5){
+  ## gene.member is named numeric vector (names are genes, values are cluster number), or a named list (each entry contains genes)
+  ## gene.member could also be a vector of gene names, in which case a single ribbon will be plotted
+  if(is.list(gene.member)){
+    gene.names=as.character(unlist(gene.member))
+    group.names=names(gene.member)
+    gene.member=factor(rep(group.names,times=unlist(lapply(gene.member, length))),labels=as.character(1:length(group.names)))
+    gene.member=as.numeric(gene.member)
+    names(gene.member)=gene.names
+    group.names=sort(unique(group.names))
+  }else if(is.null(names(gene.member))){
+    cls=vector(mode="numeric",length=length(gene.member))
+    names(cls)=gene.member
+    gene.member=cls+1
+    group.names=unique(gene.member)
+  }else{
+    group.names=unique(gene.member)
+    gene.names=names(gene.member)
+    gene.member=as.numeric(factor(gene.member,levels=as.characer(1:length(group.names))))
+    names(gene.member)=gene.names
+  }
+  gene.member=gene.member[which(names(gene.member)%in%rownames(geneByPt))]
+  if(length(gene.member)==0){
+    stop("Input genes not found in the provided data matrix.")
+  }
+  if(scale){
+    geneByPt=sweep(geneByPt,1,apply(geneByPt,1,min),"-")
+    geneByPt=sweep(geneByPt,1,apply(geneByPt,1,max),"/")*scale_max
+  }
+  p=plot_ly()
+  x=as.numeric(colnames(geneByPt))
+  if(is.null(col)){
+    col=get.colors(max(gene.member))
+  }
+  for(i in unique(gene.member)){
+    color.use=as.character(col[i])
+    genes.use=names(which(gene.member==i))
+    all.quantile=apply(geneByPt[genes.use,,drop=F],2,quantile)
+    p= p %>% 
+      add_lines(x=x, y=all.quantile["50%",],line = list(color=color.use, width=4), name = group.names[i], text=paste(genes.use,collapse = ", "), hoverinfo='text') 
+    if(length(genes.use)>1){
+      p= p %>%
+        add_ribbons(x=x, ymin=all.quantile["25%",], ymax=all.quantile["75%",],fillcolor=color.use,opacity = 0.55,line=list(width=0), name=group.names[i] , showlegend = FALSE)
+    }
+  }
+  return(p)
+}
+
+## function for hierarchical clustering
+my.heatmap <- function(M, dist.m=NULL,method="complete", plot_hm=T, cls=NULL, cls.order=NULL, source=NULL, pt_axis=F, colors=NULL,rev.order=F){
+  if(is.null(dist.m)){
+    dist.use=dist(M)
+  }else{
+    dist.use=as.dist(dist.m[rownames(M),rownames(M)])
+  }
+  if(is.null(cls)){
+    hc.genes=hclust(as.dist(dist.use),method=method)
+    ordered.genes=rownames(M)[hc.genes$order]
+  }else{
+    if(is.null(cls.order)){
+      cls.time=c()
+      all.cls=unique(cls)
+      for(cls.i in all.cls){
+        genes=names(which(cls==cls.i))
+        sums=apply(M[genes,,drop=F],1,sum)
+        ave.time=sum(sweep(as.numeric(colnames(M))*t(M[genes,]),2,sums,"/"))/length(genes)
+        cls.time=c(cls.time,ave.time)
+      }
+      cls.order=all.cls[order(cls.time,decreasing = T)]
+    }
+    ordered.genes=c()
+    for(cls.i in cls.order){
+      genes=names(which(cls==cls.i))
+      if(length(genes)>1){
+        hc.genes=hclust(as.dist(as.matrix(dist.use)[genes,genes]),method=method)
+        ordered.genes=c(ordered.genes,genes[hc.genes$order])
+      }else{
+        ordered.genes=c(ordered.genes,genes)
+      }
+    }
+    if(rev.order==T){
+      ordered.genes=rev(ordered.genes)
+    }
+  }
+  if(is.null(source)){
+    if(pt_axis){
+      p <- plot_ly(x=sort(as.numeric(colnames(M))), y=ordered.genes, 
+                   z=M[ordered.genes,order(as.numeric(colnames(M)),decreasing = F)],
+                   type = "heatmap",showscale=FALSE, colors=colors) %>% layout(xaxis = list(showticklabels = F))
+    }else{
+      p <- plot_ly(y=ordered.genes, z=M[ordered.genes,order(as.numeric(colnames(M)),decreasing = F)],
+                   type = "heatmap",showscale=FALSE, colors=colors) %>% layout(xaxis = list(showticklabels = F))
+    }
+  }else{
+    if(pt_axis){
+      p <- plot_ly(x=sort(as.numeric(colnames(M))), y=ordered.genes, 
+                   z=M[ordered.genes,order(as.numeric(colnames(M)),decreasing = F)],
+                   type = "heatmap",showscale=FALSE, source=source, colors=colors) %>% layout(xaxis = list(showticklabels = F))
+    }else{
+      p <- plot_ly(y=ordered.genes, z=M[ordered.genes,order(as.numeric(colnames(M)),decreasing = F)],
+                   type = "heatmap",showscale=FALSE, source=source, colors=colors) %>% layout(xaxis = list(showticklabels = F))
+    }
+  }
+  
+  if(plot_hm){
+    print(p)
+  }
+  if(!is.null(cls)){
+    hc.genes=cls
+  }
+  return(list(hc=hc.genes, p=p))
+}
+
+get.colors <- function(n){
+  qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+  col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))) 
+  if(n<=length(col_vector)){
+    return(col_vector[1:n])
+  }else{
+    inds=c(1:n)%%length(col_vector)
+    inds[which(inds==0)]=length(col_vector)
+    return(col_vector[inds])
+  }
+}
+show.heatmap <- function(p, cls=NULL, label.genes=NULL, colors=NULL){
+  #cls should be named vector of cls.id (named by gene name)
+  genes=p$x$attrs[[1]]$y
+  if(!is.null(cls)){
+    ## make row side color by creating subplots
+    cls=cls[genes]
+    color.ind=as.numeric(factor(cls))
+    num.color=max(color.ind)
+    if(!is.null(colors)){
+      if(length(colors)<num.color){
+        print("Not enough colors specified. Generating new colors...")
+        colors=get.colors(num.color)
+      }
+    }else{
+      colors=get.colors(num.color)
+    }
+    p.side=plot_ly(y=genes, z=as.matrix(color.ind,ncol=1),colors=colorRamp(colors),type = "heatmap",showscale=FALSE) %>% layout(xaxis = list(showticklabels = F))
+  }
+  if(!is.null(label.genes)){
+    if(length(intersect(label.genes,genes))>0){
+      p=p %>% layout(yaxis=list(tickvals = label.genes, ticktext = label.genes))
+    }
+  }
+  p.combine <- subplot(p,p.side,nrows=1,widths = c(0.9,0.1),shareY = T, margin = 0.005)
+  return(p.combine)
+}
+
+adj.links <- function(links.use, subtract=0){
+  adj.exp=subtract
+  links.use[,,"exp_dist_gaus"]=links.use[,,"exp_dist_gaus"]-adj.exp
+  links.use[,,"exp_dist_gaus"]=links.use[,,"exp_dist_gaus"]*(links.use[,,"exp_dist_gaus"]>=0)
+  links.use[,,"exp_dist_p"]=links.use[,,"exp_dist_p"]-adj.exp
+  links.use[,,"exp_dist_p"]=links.use[,,"exp_dist_p"]*(links.use[,,"exp_dist_p"]>=0)
+  links.use[,,"exp_cor"]=links.use[,,"exp_cor"]-adj.exp
+  links.use[,,"exp_cor"]=links.use[,,"exp_cor"]*(links.use[,,"exp_cor"]>=0)
+}
+
+#### define a function that combines interaction scores from selected channels
+#### define a function that combines interaction scores from selected channels
+combined_scores <- function(all_links, 
+                            channel.use=c("coexp","str","humap","go","hgnc","interp","reac","go_hgnc_reac",
+                                          "fusion","cooccurence","experiments","experiments_transferred",
+                                          "database","database_transferred","exp_cor")){
+  if(length(channel.use)==1){
+    return(all_links[,,channel.use])
+  }else{
+    return(apply(all_links[,,channel.use],c(1,2),function(x) 1-prod(1-x)))
+  }
+}
+
+links.adj <- function(dist.m, anno.m, a=1, center=c(0,"mean","median"), tails="both"){
+  if(center=="mean"){
+    l0=mean(dist.m[upper.tri(dist.m)])
+  }else if(center=="median"){
+    l0=median(dist.m[upper.tri(dist.m)])
+  }else{
+    l0=center
+  }
+  dist.adj=(dist.m-l0)*(1+a*anno.m)+l0
+  if(tails=="both"){
+    return(dist.adj)
+  }else if(tails=="smaller"){
+    dist.adj[which(dist.m>l0)]=dist.m[which(dist.m>l0)]
+  }else if(tails=="greater"){
+    dist.adj[which(dist.m<l0)]=dist.m[which(dist.m<l0)]
+  }
+  return(dist.adj)
+}
+
+g2g <- function(net,genes.use=NULL,thres=NULL,simp=F, frac=NULL, borderWidthSelected=NULL, cls=NULL, colors=NULL, all.nodes=T){
+  if(!is.null(genes.use)){
+    genes.use=intersect(genes.use,rownames(net))
+    adjM=net[genes.use, genes.use]
+  }else{adjM=net}
+  if(!is.null(frac)){
+    thres=sort(adjM[upper.tri(adjM)],decreasing = T)[max(round(length(adjM[upper.tri(adjM)])*frac),1)]
+    if(is.na(thres) || thres==0){
+      thres=NULL
+    }
+  }
+  if(!is.null(thres)){
+    adjM=adjM*(adjM>=thres)
+  }
+  if(!all.nodes){
+    diag(adjM)=0
+    ind0=which(apply(adjM,2,sum)>0)
+    adjM=adjM[ind0,ind0]
+  }
+  g=graph.adjacency(as.matrix(adjM), mode="undirected", weighted=TRUE)
+  #comp.g=components(g)
+  if(simp){
+    g=simplify(g)
+  }
+  visNet=toVisNetworkData(g)
+  visNet$edges$value=visNet$edges$weight
+  if(length(visNet$edges$weight)>0){
+    weight.range=range(visNet$edges$weight)
+    visNet$edges$length=((weight.range[2]-visNet$edges$weight)/diff(weight.range)+0.1)*200
+  }
+  if(is.null(cls)){
+    visNet$nodes$group=1
+  }else{
+    visNet$nodes$group=cls[visNet$nodes$id]
+    if(!is.null(colors)){
+      visNet$nodes$color=colors[visNet$nodes$group]
+    }
+  }
+  visNet$nodes$title=visNet$nodes$id
+  if(!is.null(borderWidthSelected)){
+    visNet$nodes$borderWidthSelected=borderWidthSelected
+  }
+  return(visNet)
+}
+
+igraph_cls <- function(modules_use, adj_tbl, method=NULL,louvain_gamma=0.3,leiden_res=8){
+  modules_use=intersect(modules_use,rownames(adj_tbl))
+  adj_tbl=adj_tbl[modules_use,modules_use]
+  diag(adj_tbl)=0
+  if(is.null(method)){
+    cls_methods=c("components","walktrap","louvain","infomap","label_prop","leiden")
+  }else{
+    cls_methods=intersect(method,c("components","walktrap","louvain","infomap","label_prop","spinglass","eigen","optimal", "edge_btw","fast_greedy"))
+  }
+  cls_tbl=matrix(NA, nrow = length(modules_use), ncol=length(cls_methods), dimnames = list(modules_use, cls_methods))
+  g <- graph.adjacency(adj_tbl, mode="undirected", weighted=TRUE)
+  if("walktrap"%in%cls_methods){
+    walktrap=cluster_walktrap(g, weights = E(g)$weight, steps = 3, merges = T, modularity = TRUE, membership = TRUE)
+    cls_tbl[walktrap$names,"walktrap"]=membership(walktrap)
+  }
+  if("components"%in%cls_methods){
+    connected=clusters(g)
+    cls_tbl[names(connected$membership),"components"]=membership(connected) 
+  }
+  if("louvain"%in%cls_methods){
+    louvain=cluster_louvain(g, weights = NULL)
+    cls_tbl[louvain$names,"louvain"]=louvain$membership
+    #louvain=louvain(adj_tbl, gamma=louvain_gamma)
+    #cls_tbl[louvain$names,"louvain"]=louvain$community
+  }
+  if("leiden"%in%cls_methods){
+    lei=leiden(adj_tbl, resolution_parameter=leiden_res, n_iterations = -1) #,partition_type = "RBERVertexPartition"
+    #c("RBConfigurationVertexPartition", "ModularityVertexPartition", "RBERVertexPartition", "CPMVertexPartition" "SurpriseVertexPartition")
+    cls_tbl[rownames(adj_tbl),"leiden"]=lei
+  }
+  if("eigen" %in% cls_methods){
+    l_eigen=cluster_leading_eigen(g)
+    cls_tbl[l_eigen$names,"eigen"]=membership(l_eigen)
+  }
+  if("infomap"%in%cls_methods){
+    infomap=cluster_infomap(g, e.weights = NULL, v.weights = NULL, nb.trials = 100,modularity = TRUE)
+    cls_tbl[infomap$names,"infomap"]=membership(infomap)
+  }
+  if("label_prop"%in%cls_methods){
+    prop=cluster_label_prop(g, weights = NULL, initial = NULL, fixed = NULL)
+    cls_tbl[prop$names,"label_prop"]=membership(prop)
+  }
+  if("spinglass"%in%cls_methods){
+    print("spinglass")
+    if(!"components"%in%cls_methods){
+      connected=clusters(g)
+    }
+    if(length(unique(membership(connected)))==1){
+      spin=round(length(modules_use)/10)
+      print("1 component")
+      spinglass= cluster_spinglass(g, spins = spin, parupdate = FALSE, start.temp = 1, stop.temp = 0.01,
+                                   cool.fact = 0.99, update.rule ="simple", gamma = 1, implementation = "orig")
+      cls_tbl[spinglass$names,"spinglass"]=membership(spinglass)
+    }else{
+      print("multiple components")
+      k=0
+      for(i in unique(membership(connected))){
+        genei=names(connected$membership)[which(membership(connected)==i)]
+        if(length(genei)<5){
+          cls_tbl[genei,"spinglass"]=k+1
+          k=k+1
+        }else{
+          gi=graph.adjacency(adj_tbl[genei,genei], mode="undirected", weighted=TRUE)
+          #print(length(genei))
+          spin=max(round(length(genei)/10),2)
+          spinglass = cluster_spinglass(gi, spins = spin, parupdate = FALSE, start.temp = 1, stop.temp = 0.01,
+                                        cool.fact = 0.99, update.rule ="simple", gamma = 1, implementation = "orig")
+          cls_tbl[spinglass$names,"spinglass"]=membership(spinglass)+k
+          k=max(cls_tbl[spinglass$names,"spinglass"])
+        }
+      }
+    }
+  }
+  if("optimal"%in%cls_methods){
+    optimal=cluster_optimal(g)
+    cls_tbl[optimal$names,"optimal"]=membership(optimal)
+  }
+  if("edge_btw"%in%cls_methods){
+    weights=max(E(g)$weight)*1.1-E(g)$weight
+    edge_btw=cluster_edge_betweenness(g, weights = weights, directed = F, edge.betweenness = F, merges = F,
+                             bridges = F, modularity = F, membership = TRUE)
+    cls_tbl[edge_btw$names,"edge_btw"]=membership(edge_btw)
+  }
+  if("fast_greedy"%in%cls_methods){
+    fast_greedy=cluster_fast_greedy(g, merges = F, modularity = F)
+    cls_tbl[fast_greedy$names,"fast_greedy"]=membership(fast_greedy)
+  }
+  return(cls_tbl)
+}
+
+getModuleInfo <- function(tissue, everything, annot=c("GO", "Reactome", "Interpro", "HGNC")){
+  # tissue is "Notochord" or "Prechordal plate"
+  if(tissue=="Notochord"){
+    module_info=everything$noto_all_module_member_p
+  }else if(tissue=="Prechordal plate"){
+    module_info=everything$pcp_all_module_member_p
+  }
+  module_info$pVal=do.call(rbind,module_info$pVal[annot])
+  return(module_info)
+}
+
+annoTbl <- function(module_info, genes){
+  sel.genes=intersect(genes,rownames(module_info$geneXmodule))
+  mpVal=module_info$pVal
+  if(length(sel.genes)>0){
+    gXm=module_info$geneXmodule[sel.genes,,drop=F]
+    gXm=gXm[,which(apply(gXm, 2,sum)>0),drop=F]
+    #anno.df=data.frame(annotation=colnames(gXm), adj.p=mpVal[colnames(gXm), "p.adj"], stringsAsFactors = F)
+    #anno.df$gene=""
+    anno.df=data.frame(gene=rownames(gXm), stringsAsFactors = F)
+    anno.df$annotation=""
+    for(i in 1:dim(anno.df)[1]){
+      anno.df[i,"annotation"]=paste0(colnames(gXm)[which(gXm[anno.df[i,"gene"],]>0)],collapse = " | ")
+    }
+    #anno.df=anno.df[order(anno.df$adj.p,decreasing = F),]
+    #rownames(anno.df)=1:(dim(anno.df)[1])
+    return(anno.df)
+  }else{
+    return(data.frame())
+  }
+}
+
+getLinks <- function(links, combined=NULL, channels=c("soft_cos","smoothed_dist", "HuMap", "GO", "Reactome", "Interpro", "HGNC",  
+                                                     "GO+HGNC", "GO+Reactome", "HGNC+Reactome",  "GO+HGNC+Reactome")){
+  ##"String"="combined_score", "String.less"="combined_less", "String.more"="combined_more"
+  if("String"%in%channels){
+    channels=c(channels,"combined_score")
+  }
+  if("String.less"%in%channels){
+    channels=c(channels,"combined_less")
+  }
+  if("String.more"%in%channels){
+    channels=c(channels,"combined_more")
+  }
+  channels.use=intersect(channels,dimnames(links)[[3]])
+  links.use=links[,,channels.use]
+  if(!is.null(combined)){
+    diag(combined)=0
+    links.use=abind(links.use,combined,make.names = T)
+  }
+  return(links.use)
+}
+
+linkTbl <- function(links.use, genes){
+  genes=intersect(dimnames(links.use)[[1]],genes)
+  sub_links=links.use[genes,genes,]
+  link.df=dcast(melt(sub_links),Var1+Var2~Var3, value.var="value")
+  varnames=colnames(link.df)
+  varnames[1]="gene1"
+  varnames[2]="gene2"
+  colnames(link.df)=varnames
+  ind_kp=which(apply(link.df[,3:dim(link.df)[2]],1,sum)>0)
+  if(length(ind_kp)>0){
+    link.df=link.df[ind_kp,,drop=F]
+    link.df=link.df[order(link.df$combined,decreasing = T),,drop=F]
+    rownames(link.df)=1:(dim(link.df)[1])
+  }else{
+    link.df=link.df[c(),]
+  }
+  return(link.df)
+}
+
+fisher.exact.enrichment <- function(genes, gXm=module_info$geneXmodule, p.adj.method="fdr") {
+  # find the annotations in the group
+  gXm=gXm[which(apply(gXm,1,sum)>0),]
+  genes=intersect(genes,rownames(gXm))
+  if(length(genes)>0){
+    annos.test=colnames(gXm)[which(apply(gXm[genes,,drop=F],2,sum)>0)]
+    # pre-alocate dataframe to store test results
+    enrich=data.frame(row.names = annos.test, stringsAsFactors = F)
+    enrich$p=NA
+    enrich$genes.in.selection=""
+    enrich$genes.in.tissue=""
+    all.genes=rownames(gXm)
+    out.genes=setdiff(all.genes,genes)
+    # for each annotation, calculate enrichment
+    for(anno in annos.test){
+      all.with.anno = all.genes[which(gXm[,anno]>0)]
+      in.with.anno = intersect(all.with.anno, genes)
+      out.with.anno = intersect(all.with.anno, out.genes)
+      in.without.anno = setdiff(genes, in.with.anno)
+      out.without.anno = setdiff(out.genes, out.with.anno)
+      a=length(in.with.anno)
+      b=length(out.with.anno)
+      c=length(in.without.anno)
+      d=length(out.without.anno)
+      ft <- fisher.test(matrix(c(a,b,c,d),nrow=2,ncol=2),alternative="greater")
+      enrich[anno,"p"]=ft$p.value
+      enrich[anno,c("genes.in.selection","genes.in.tissue")]=c(paste0(in.with.anno,collapse = ", "),paste0(out.with.anno,collapse = ", "))
+    }
+    # calculate fdr adjusted p values
+    enrich$p.adj=p.adjust(enrich$p, p.adj.method)
+    enrich=enrich[order(enrich$p.adj,decreasing = F),]
+    return(enrich)
+  }else{
+    return(NULL)
+  }
+}
+
+str2genes <- function(text_in){
+  genes=gsub(" ","",text_in)
+  genes=toupper(unlist(strsplit(genes,",")))
+  return(genes)
+}
+
+#### Create gene by annotation table (1 means gene associated with that annotation, 0 means gene not associated) ####
+geneXmodule.tbl <- function(list.all.noto.nodup){
+  noto.genes=unique(as.character(unlist(list.all.noto.nodup)))
+  noto.geneXmodule=matrix(0,nrow=length(noto.genes),ncol=length(list.all.noto.nodup))
+  rownames(noto.geneXmodule)=noto.genes
+  colnames(noto.geneXmodule)=names(list.all.noto.nodup)
+  for(m in names(list.all.noto.nodup)){
+    noto.geneXmodule[list.all.noto.nodup[[m]],m]=1
+  }
+  return(noto.geneXmodule)
+}

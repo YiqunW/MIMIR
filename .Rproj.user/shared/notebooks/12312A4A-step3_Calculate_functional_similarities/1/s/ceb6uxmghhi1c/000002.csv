@@ -1,0 +1,9 @@
+"0","noto.genes=scan(""../example_results/genes.noto.txt"",what=""character"") #genes enriched in the notochord (calculated in step1). "
+"2","Read 806 items
+"
+"0","pcp.genes=scan(""../example_results/genes.pcp.txt"",what=""character"") #genes enriched in the hatching gland (calculated in step1). "
+"2","Read 802 items
+"
+"0","bg.genes=scan(""../example_data/genes.bg.2x.txt"", what=""character"") #union of genes enriched in all other cell types"
+"2","Read 8941 items
+"

@@ -1,0 +1,28 @@
+{
+    "id": "B84E811C",
+    "path": "~/Dropbox/Desktop_Laptop/Paper2020/MIMIR/example_scripts/step5_Check_clustering_results.Rmd",
+    "project_path": "example_scripts/step5_Check_clustering_results.Rmd",
+    "type": "r_markdown",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1706228906925.0,
+    "source_on_save": false,
+    "relative_order": 10,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "187,0",
+        "scrollLine": "236",
+        "last_setup_crc32": "4751B27Bbb338d19"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1720995799,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1720995799,
+    "read_only": false,
+    "read_only_alternatives": []
+}

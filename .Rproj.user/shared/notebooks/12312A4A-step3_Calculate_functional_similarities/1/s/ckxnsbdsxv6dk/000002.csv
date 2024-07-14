@@ -1,0 +1,8 @@
+"0","evidence_use=c(""experiments"", ""experiments_transferred"",""textmining"",""textmining_transferred"", ""homology"")"
+"0","genes_use=union(noto.genes, pcp.genes) "
+"0","str_ExpTxt = str_sim_M(string_tbl=str_zf_symb, evi=evidence_use, genes_use=genes_use, protein_cols=c(""gene1"",""gene2""))"
+"0",""
+"0","## Construct an additional string similarity matrix with the default combined scores"
+"0","str_default = str_sim_M(string_tbl=str_zf_symb, evi=""default"", genes_use=genes_use, protein_cols=c(""gene1"",""gene2""))"
+"0",""
+"0","# str_ExpTxt and str_default are square gene x gene metrices with similarity values (i.e. interaction scores) between 0 and 1"
