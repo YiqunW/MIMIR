@@ -1,3 +1,0 @@
-"0","plotTree(object,""time.windows"",legend = F)
-"
-"2","`guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> = ""none"")` instead."

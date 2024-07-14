@@ -1,5 +1,0 @@
-"0","reacAnno <- read.table(""../example_data/Reactome2ZfinSymbol.txt"", header = 1, stringsAsFactors = F,sep = ""\t"")"
-"0","### convert reactome ids to that of humans (to facilitate id hierachical relationship mapping, since annotations for human ids are more complete)"
-"0","reacAnno.orig=reacAnno"
-"0","reacAnno$id=sub(""DRE"",""HSA"",reacAnno$id)"
-"0","head(reacAnno)"

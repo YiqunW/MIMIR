@@ -1,6 +1,0 @@
-"0","print(paste0(""Functional databases used: "",paste(dimnames(anno.sim.pcp)[[3]], collapse = "", "")))
-"
-"1","[1]"
-"1"," ""Functional databases used: STRING, STRING_ExpTxt, GO_cc, GO_bp, GO_mf, Reactome, Interpro"""
-"1","
-"

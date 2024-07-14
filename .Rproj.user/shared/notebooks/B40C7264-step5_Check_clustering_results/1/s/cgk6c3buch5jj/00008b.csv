@@ -1,7 +1,0 @@
-"0","## Use the previously picked 'best' clustering result (stored in the gene.info slot)
-cluster_plots = plotClusters(noto.obj, cluster_use=""STRING_ExpTxt+GO_noCC+Reactome+Interpro:AND:JS_sim;leiden_6_RBConfigurationVertex"",
-                             exp_use=""smoothed.exp"", save_pdf=""../example_results/cluster_plots1.pdf"", 
-                             save_width = 20, save_height = 40, return_plots=T, show_plot=F) ## show_plot=F: full plot is too big to show at once in this notebook
-"
-"2","Error in !save_pdf : invalid argument type
-"

@@ -1,7 +1,0 @@
-"0","# 1. A GO term ID to zfin symbol table. An additional column is included to specify whether a term is ""biological process"", ""cellular component"", or ""molecular function""."
-"0","### This table can be constructed with various methods. The zebrafish Gene Ontology Data can be downloaded from https://zfin.org/downloads, which contains the relevant information. Alternatively, the biomaRt R package can be used to get GO ids for all genes. "
-"0","goAnno <- read.csv(""../example_data/go_table_axial_sep9_2021.csv"", stringsAsFactors = F)"
-"0",""
-"0","# 2. The hierarchical relation for GO terms are available from the package AnnotationDbi and will be automatically called in downstream functions"
-"0","# inspect GO table"
-"0","head(goAnno)"

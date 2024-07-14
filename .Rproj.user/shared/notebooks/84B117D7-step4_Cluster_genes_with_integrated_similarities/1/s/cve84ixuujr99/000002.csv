@@ -1,3 +1,0 @@
-"0","sim=integrate_all_exp_anno(noto.obj, exp_use=exp_use, anno_use=anno_use, method=""+"",add=0, maxscale = 1)"
-"0","## add to the object"
-"0","noto.obj@integrated.sim <- abind(noto.obj@integrated.sim, sim, along = 3)"

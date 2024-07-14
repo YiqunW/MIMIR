@@ -1,9 +1,0 @@
-"0",""
-"0","# creat anno object"
-"0","interpro = createAnno(db='Interpro', gene.anno = interpAnno, gene.col='gene', id.col='id', desp.col = 'description',"
-"0","                      genes = union(noto.genes, pcp.genes), bg.genes = bg.genes, "
-"0","                      hierarchy.df=interp.p2c, parent.col=1, child.col=2)"
-"2","40 input genes are not found in the gene.anno table
-"
-"2","290 input background genes are not found in the gene.anno table
-"

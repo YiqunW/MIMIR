@@ -1,4 +1,0 @@
-"0","## pairwise combinations of the expression and functional similarities listed in the following vectors will be used"
-"0","exp_use = c(""soft_cosine_sim"", ""euclidean_sim"", ""JS_sim"")"
-"0","anno_use = c(""STRING+GO+Reactome+Interpro"",""STRING_ExpTxt+GO_noCC+Reactome+Interpro"","
-"0","             ""GO+Reactome+Interpro"", ""GO"", ""STRING"")"

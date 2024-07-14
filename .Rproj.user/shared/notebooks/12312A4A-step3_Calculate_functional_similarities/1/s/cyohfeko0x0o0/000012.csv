@@ -1,8 +1,0 @@
-"0",""
-"0","# create Anno object"
-"0","go = createAnno(db='GO', gene.anno = goAnno, gene.col='gene', id.col='id', cat.col='category', desp.col = 'description',"
-"0","                      genes = union(noto.genes, pcp.genes), bg.genes = bg.genes)"
-"2","34 input genes are not found in the gene.anno table
-"
-"2","333 input background genes are not found in the gene.anno table
-"

@@ -1,6 +1,0 @@
-"0","fig <- plotly_scatter(metric_tbl, x=""msigdb_c2_median(-logP)"", y=""intra_mean_exp_cor"",color=""AMI"", hover_text = ""similarity"", "
-"0","               color_pal = 'viridis', marker_size = 8)"
-"0","best_metric=metric_tbl[intersect(which(metric_tbl$intra_mean_exp_cor>0.14),which(metric_tbl$`msigdb_c2_median(-logP)`>7)),]"
-"0","bestxy=c(best_metric$`msigdb_c2_median(-logP)`,best_metric$intra_mean_exp_cor)"
-"0","fig %>% add_trace(type = 'scatter', mode = 'markers', x = bestxy[1], y = bestxy[2],color='',"
-"0","                  marker = list(size = 15, symbol = 'circle-open', color=""coral""), showlegend = FALSE)"

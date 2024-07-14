@@ -1,3 +1,0 @@
-"0","suppressPackageStartupMessages(library(URD))"
-"0","object <- readRDS(""../../MIMIR large file/object_6_tree.rds"")"
-"0","plotTree(object,label.segments = T)"

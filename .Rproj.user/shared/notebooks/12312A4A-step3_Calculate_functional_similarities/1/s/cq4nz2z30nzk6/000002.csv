@@ -1,3 +1,0 @@
-"0","saveRDS(reactome, ""../example_results/reactome.rds"")"
-"0","saveRDS(go, ""../example_results/go.rds"")"
-"0","saveRDS(interpro, ""../example_results/interpro.rds"")"
