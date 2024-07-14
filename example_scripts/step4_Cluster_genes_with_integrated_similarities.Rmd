@@ -1,0 +1,97 @@
+---
+title: 'Step4: Cluster with integrated similarities'
+author: "Yiqun Wang"
+output: 
+  github_document:
+    number_sections: true
+---
+In this example, we will cluster the notochord-enriched genes (identified in Step1) based on their expression similarities (calculated in Step2) as well as their functional similarities (calculated in Step3). 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, message=FALSE}
+source("../functions/combine_scores_and_cluster.R")
+source("../functions/MIMIR_obj.R")
+```
+
+# Load the MIMIR object that contains both expression and functional similarities
+Object with expression similarities is constructed in step 2; funcitonal similarities were calculated in step 3 and added to the same object.
+```{r}
+## object with expression similarity scores and expression matrix:
+noto.obj <- readRDS("../example_results/noto_mimir.rds")
+
+## expression similarities available in the object
+print(dimnames(noto.obj@exp.sim)[[3]]) 
+## annotation similarities available in the object
+print(dimnames(noto.obj@func.sim)[[3]])
+```
+
+# Integrate expression and functional similarities
+We can calculate the integrated score for each expression and functional similarity pair, e.g. cos_dist and STRING, or jsdiv and string_ExpTxt+GO+Reactome+Interpro. We will try different expression-function combinations and different integration methods and compare the clustering results derived from them. 
+```{r}
+## pairwise combinations of the expression and functional similarities listed in the following vectors will be used
+exp_use = c("soft_cosine_sim", "euclidean_sim", "JS_sim")
+anno_use = c("STRING+GO+Reactome+Interpro","STRING_ExpTxt+GO_noCC+Reactome+Interpro",
+             "GO+Reactome+Interpro", "GO", "STRING")
+```
+
+## 1. Expression OR function: S = 1-(1-Se)(1-Sa) 
+Integrated score will be high if either expression or functional similarity is high. For instance, a high expression similarity combined with a low functional similarity will still give a high score. 
+```{r}
+sim <- integrate_all_exp_anno(noto.obj, exp_use=exp_use, anno_use=anno_use, method="OR",add=0, maxscale = 1)
+## store in the mimir object
+noto.obj@integrated.sim <- sim
+## noto.obj@integrated.sim is a 3d array (gene x gene x similarity_method)
+dimnames(noto.obj@integrated.sim)[[3]]
+```
+
+## 2. Expression AND function: S = Se*Sa
+Integrated score will be high if both expression and functional similarities are high.
+```{r}
+sim=integrate_all_exp_anno(noto.obj, exp_use=exp_use, anno_use=anno_use, method="AND",add=0.05, maxscale = 1) # add a small value to avoid 0 product when one of the similarity is 0 but the other is high
+## add to the object
+noto.obj@integrated.sim <- abind(noto.obj@integrated.sim, sim, along = 3)
+```
+
+## 3. Expression + function: S = Se + Sa
+```{r}
+sim=integrate_all_exp_anno(noto.obj, exp_use=exp_use, anno_use=anno_use, method="+",add=0, maxscale = 1)
+## add to the object
+noto.obj@integrated.sim <- abind(noto.obj@integrated.sim, sim, along = 3)
+```
+
+# Cluster
+## Cluster the genes using integrated similarities scores
+In our `igraph_clus` function, we use functions from the [igraph](https://r.igraph.org/) package to turn similarity matrices into gene networks and cluster the genes accordingly, using either built-in methods in igraph, or leiden algorithm from the [leiden](https://cran.r-project.org/web/packages/leiden/index.html) package. 
+```{r}
+## Try 3 different clustering methods: louvain, infomap, and leiden. Leiden needs additional resolution and partition method parameters
+## try a few resolution parameters for leiden
+## trim the similarity matrix to keep only strong connections (can help speed up the calculation and resolve over connections between genes)
+res=c(2,3,4,5,6,7)
+noto.obj@clusters <- cluster_all(noto.obj@integrated.sim, trim_adj=T, n_kp=120, 
+                                 method=c("louvain","infomap","leiden"), leiden_iter=50, leiden_res=res)
+```
+
+## Cluster with only expression or only functional similarities too for comparison
+```{r}
+clus <- cluster_all(noto.obj@exp.sim[,,exp_use], trim_adj=T, n_kp=120, 
+                                 method=c("louvain","infomap","leiden"), leiden_iter=50, leiden_res=res)
+noto.obj@clusters = append(noto.obj@clusters, clus)
+
+clus <- cluster_all(noto.obj@func.sim[,,anno_use], trim_adj=T, n_kp=120, 
+                                 method=c("louvain","infomap","leiden"), leiden_iter=50, leiden_res=res)
+noto.obj@clusters = append(noto.obj@clusters, clus)
+```
+
+### Save the object with clustering results
+```{r}
+saveRDS(noto.obj, "../example_results/noto_mimir.rds")
+```
+
+
+### Check how cluster results look
+```{r}
+noto.obj=readRDS("../example_results/noto_mimir.rds")
+head(noto.obj@clusters$`GO+Reactome+Interpro:AND:euclidean_sim`) 
+```
+*Each column contains the cluster id of genes for a specific clustering method.*

@@ -1,0 +1,70 @@
+---
+title: 'Step2: Calculate Expression Similarities'
+author: "Yiqun Wang"
+output: github_document
+---
+In this example, we will 
+Calculate the expression similarities between enriched genes identified from step 1 in the zebrafish notochord and hatching gland. Similarities will be calculated with several different metrics and stored in a MIMIR object.
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+source("../functions/expression_similarity_calculations.R")
+source("../functions/MIMIR_obj.R")
+```
+
+## Read in expression matrix for notochord and hatching gland
+The expression matrices were extracted from the URD reconstructed transcriptional trajectories for hatching gland and notochord from 3 to 24 hpf. The trajectory data (URD object DraftTree.rds) can be found in the example_data folder. Cell names in the expression matrices are replaced with their pseudotimes. 
+```{r read}
+## read in read normalized log scaled expression for notochord (noto) and hatching gland (pcp, prechordal plate)
+noto.exp = read.csv("../example_data/notochord_GeneByPseudotime.csv",as.is = T, stringsAsFactors = F,check.names = F,row.names = 1)
+pcp.exp = read.csv("../example_data/hatching_gland_GeneByPseudotime.csv",as.is = T, stringsAsFactors = F,check.names = F,row.names = 1)
+```
+
+## Create an object to store expression data and similarities
+```{r}
+noto.obj <- createMIMIR(name="Notochord", exp.data=as.matrix(noto.exp))
+pcp.obj <- createMIMIR(name="Hatching Gland", exp.data=as.matrix(pcp.exp))
+
+noto.obj
+pcp.obj
+```
+
+## Calculate expression distances using a few different methods
+```{r}
+## results will be stored in 3D arrarys (gene x gene x method)
+### Hatching gland
+pcp.obj@exp.dis <- exp_dis(x=pcp.obj@exp.data, methods=c("cosine", "soft_cosine", "euclidean", "JS"), 
+                       smooth=F, pt=pcp.obj@pseudotime, sd = 0.01, cutoff=4,
+                       plot_blur = T, verbose = T)
+
+### Notochord
+noto.obj@exp.dis = exp_dis(x=noto.obj@exp.data, methods=c("cosine", "soft_cosine", "euclidean", "JS"), 
+                       smooth=F, pt=noto.obj@pseudotime, sd = 0.01, cutoff=4,
+                       plot_blur = T, verbose = T)
+```
+
+### inspect the structure of the output
+```{r}
+pcp.obj@exp.dis[1:5,1:5,1:3]
+```
+
+## Convert expression distances to similarities
+```{r}
+## Notochord
+noto.obj@exp.sim=all_dist_to_sim(noto.obj@exp.dis, max.score = 0.95)
+
+## Hatching gland
+pcp.obj@exp.sim=all_dist_to_sim(pcp.obj@exp.dis, max.score = 0.95)
+
+## inspect  output
+pcp.obj@exp.sim[1:5,1:5,1:3]
+range(pcp.obj@exp.sim)
+```
+
+## Save the MIMIR objects with the expression matrices and gene expression similarities
+```{r}
+saveRDS(noto.obj, "../example_results/noto_mimir.rds")
+saveRDS(pcp.obj, "../example_results/hg_mimir.rds")
+```
