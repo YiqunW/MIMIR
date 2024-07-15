@@ -3,6 +3,8 @@ require(GOSemSim)
 require(GO.db)
 require(abind)
 
+#' Format InterPro Parent-Child Tree File
+#' 
 #' Convert the ParentChildTreeFile downloaded from interprot (https://www.ebi.ac.uk/interpro/download/) into a dataframe with two columns.
 #'
 #' @param fileName String. Path to the downloaded txt file.
@@ -129,6 +131,16 @@ offspring.list <- function(p2c){
   return(c.list)
 }
 
+#' Get Children of a Parent Node
+#'
+#' Retrieve all child nodes for a given parent node in a parent-child dataframe.
+#'
+#' @param p2c Dataframe with two columns. The first column contains the parent ids, the second contains the child ids.
+#' @param p The parent node id.
+#'
+#' @return A vector of child node ids.
+#'
+#' @export
 get_children <- function(p2c, p){
   all_c=c()
   M_cs=p2c[which(p2c[,1]==p),2]
@@ -157,6 +169,16 @@ ancestor.list <- function(p2c, children){
   return(p.list)
 }
 
+#' Get Parents of a Child Node
+#'
+#' Retrieve all parent nodes for a given child node in a parent-child dataframe.
+#'
+#' @param p2c Dataframe with two columns. The first column contains the parent ids, the second contains the child ids.
+#' @param c The child node id.
+#'
+#' @return A vector of parent node ids.
+#'
+#' @export
 get_parents <- function(p2c, c){
   all_p=c()
   M_ps=p2c[which(p2c[,2]==c),1]
@@ -286,6 +308,21 @@ getAncestors <- function(ont) {
   return (eval(parse(text=Ancestors)))
 }
 
+#' Compute the Information Content Method for Annotations
+#'
+#' Calculate the similarity scores between two sets of annotation IDs using various methods.
+#'
+#' @param ID1 A vector of annotation IDs for the first set.
+#' @param ID2 A vector of annotation IDs for the second set.
+#' @param goAnno A dataframe containing gene annotations.
+#' @param method A string specifying the method to use for calculating similarity. Default is "Jiang".
+#' @param IC A named vector of information content values.
+#' @param cat Optional. "MF", "BP", or "CC". Required only if input is GO annotations with a "category" column.
+#' @param anc Optional. A list of ancestors for the annotation IDs.
+#'
+#' @return A numeric value representing the similarity score.
+#'
+#' @export
 infoContentMethod.anno <- function(ID1, ID2, goAnno, method="Jiang", IC=NULL, cat=NULL, anc=NULL) {
   ## IC is biased
   ## because the IC of a term is dependent on its children but not on its parents.
@@ -377,7 +414,17 @@ func_sim <- function(object, cat=NULL, genes=NULL){
   return(object)
 }
 
-#' Calculate similarity scores between two sets of annotation ids. Adapted from functions from the GOSemSim package.
+#' Calculate Similarity Scores Between Two Sets of Annotation IDs
+#'
+#' Adapted from functions in the GOSemSim package.
+#'
+#' @param SimScores A matrix of similarity scores between two sets of annotation IDs.
+#' @param combine A string specifying the method to combine similarities. Default is "BMA".
+#' @param digits Number of decimal places to round the results to. Default is 4.
+#'
+#' @return A numeric value representing the combined similarity score.
+#'
+#' @export
 combineScores.anno <- function(SimScores, combine, digits=4) {
   ####!! modified from the original function to properly calculate cases with 1 row/column 
   if (length(combine) == 0) {  #if not define combine
@@ -490,9 +537,21 @@ str_comb <- function(str_tbl_full, protein_cols=c("protein1","protein2"),
   return(comb_tbl)
 }
 
-## Convert the STRING database gene-gene interaction table to a symmetric similarity matrix
 library(dplyr)
-#library(igraph)
+#' Convert STRING Database Gene-Gene Interaction Table to Similarity Matrix
+#'
+#' Convert the STRING database gene-gene interaction table to a symmetric similarity matrix.
+#'
+#' @param str_ppi A dataframe containing gene-gene interaction data from the STRING database.
+#' @param thres A threshold value to filter interaction scores.
+#' @param values A string specifying the column name for combined interaction scores.
+#' @param g1.col A string specifying the column name for the first gene.
+#' @param g2.col A string specifying the column name for the second gene.
+#' @param method A string specifying the method to aggregate interaction scores. Default is "max".
+#'
+#' @return A symmetric matrix representing gene-gene similarity.
+#'
+#' @export
 str_ppi_2tbl <- function(str_ppi, thres, values="combined_score",g1.col="protein1", g2.col="protein2",method="max"){
   ind_kp=which(str_ppi[,values]>thres)
   str_ppi=str_ppi[ind_kp,]
@@ -524,6 +583,19 @@ str_ppi_2tbl <- function(str_ppi, thres, values="combined_score",g1.col="protein
   return(str_ppi.M)
 }
 
+#' Generate a Similarity Matrix from STRING Data
+#'
+#' Generate a similarity matrix from STRING database data.
+#'
+#' @param string_tbl A dataframe containing gene-gene interaction data from the STRING database.
+#' @param evi A vector specifying the evidence channels to use.
+#' @param genes_use A vector of gene names to include in the similarity matrix.
+#' @param protein_cols A vector of length 2 specifying the names of the two columns containing gene (or protein) ids.
+#' @param score_col A string specifying the column name for interaction scores.
+#'
+#' @return A symmetric matrix representing gene-gene similarity.
+#'
+#' @export
 str_sim_M <- function(string_tbl, evi, genes_use, protein_cols=c("gene1","gene2"), score_col="combined_score"){
   if(!is.null(genes_use)){
     ind1=which(string_tbl[,protein_cols[1]]%in%genes_use)
@@ -549,6 +621,18 @@ str_sim_M <- function(string_tbl, evi, genes_use, protein_cols=c("gene1","gene2"
   }
 }
 
+
+#' Subtract Mean Value from Matrix
+#'
+#' Subtract the mean value from a matrix and adjust values.
+#'
+#' @param anno.matrix A matrix representing gene-gene similarities.
+#' @param prt_mean Boolean. Whether to print the mean value. Default is FALSE.
+#' @param prior Optional. A numeric value representing the prior mean value.
+#'
+#' @return A matrix with mean value subtracted.
+#'
+#' @export
 subtract_mean <- function(anno.matrix, prt_mean=F, prior=NULL){
   if(is.null(prior)){
     bg.ave=mean(anno.matrix[upper.tri(anno.matrix)])
@@ -561,6 +645,19 @@ subtract_mean <- function(anno.matrix, prt_mean=F, prior=NULL){
   return(anno.matrix)
 }
 
+#' Stack Functional Similarity Matrices
+#'
+#' Combine multiple functional similarity matrices into a 3D array.
+#'
+#' @param simM_list A list of similarity matrices.
+#' @param genes_use A vector of genes to include in the combined array. Default is "all".
+#' @param adj_prior Boolean or numeric. Whether to adjust for prior mean value. Default is FALSE.
+#' @param add_to Optional. An existing 3D array to add the new matrices to.
+#' @param verbose Boolean. Whether to print verbose output. Default is TRUE.
+#'
+#' @return A 3D array of combined similarity matrices.
+#'
+#' @export
 stack_func_sim <- function(simM_list, genes_use="all", adj_prior=F, add_to=NULL, verbose=T){
   if(is.null(genes_use)){
     if(!is.null(add_to)){
@@ -647,20 +744,18 @@ combine_anno_scores <- function(anno.sim, channel.use, prior=NULL){
   }
 }
 
-# Combine scores from different annotation sources
-# 
-# This function takes functional similarities derived from different annotation databases and combines them.
-# 
-# Arguments:
-# - anno.sim: A 3d array of size n_genes x n_genes x n_databases. Storing pairwise functional similarities derived from each database.
-# - how.to: A named list of vectors specifying which scores to combine (names matches the 3rd dimnames of the input score array). Entry names will be used as the 3rd dimension names of the array storing the combined scores.
-# - add: Boolean. If TRUE, bind the newly computed combined score array with the input anno.sim array and return this extended score array. If FALSE, return the newly computed combined score array only.
-# 
-# Returns:
-# - A 3d array with combined (and individual, if add=T) similarity scores.
-# 
-# Examples:
-# add_combined_scores(anno.sim, how.to = list("combination1"=c("GO_BP","Interpro"), "combination2"=c("GO_BP","GO_MF")))
+#' Combine Scores from Different Annotation Sources
+#'
+#' Combine functional similarities derived from different annotation databases.
+#'
+#' @param anno.sim A 3D array of size n_genes x n_genes x n_databases. Storing pairwise functional similarities derived from each database.
+#' @param how.to A named list of vectors specifying which scores to combine.
+#' @param add Boolean. If TRUE, bind the newly computed combined score array with the input anno.sim array. Default is TRUE.
+#' @param verbose Boolean. Whether to print verbose output. Default is TRUE.
+#'
+#' @return A 3D array with combined (and individual, if add=TRUE) similarity scores.
+#'
+#' @export
 add_combined_scores <- function(anno.sim, how.to, add=T, verbose=T){
   anno_combined=list()
   for(comb_name in names(how.to)){
@@ -678,14 +773,33 @@ add_combined_scores <- function(anno.sim, how.to, add=T, verbose=T){
   return(combined_anno)
 }
 
-## define a function to add the functional similarity array to mimir object
+#' Add Functional Similarity Array to MIMIR Object
+#'
+#' Add the functional similarity array to a MIMIR object.
+#'
+#' @param mimir.obj A MIMIR object.
+#' @param anno.sim A 3D array of functional similarities.
+#'
+#' @return An updated MIMIR object.
+#'
+#' @export
 add_to_MIMIR <- function(mimir.obj, anno.sim){
   gene_order=rownames(mimir.obj@exp.sim) #make sure the new array is in compatible with the expression similarity array already in the object
   mimir.obj@func.sim <- anno.sim[gene_order, gene_order,]
   return(mimir.obj)
 }
 
-## define a function to add the gene-annotation-description table in the anno objects to mimir object
+#' Add Gene-Annotation-Description Table to MIMIR Object
+#'
+#' Add the gene-annotation-description table from Anno objects to a MIMIR object.
+#'
+#' @param mimir.obj A MIMIR object.
+#' @param anno.obj An Anno object.
+#' @param filter.genes Boolean. Whether to filter genes based on the MIMIR object. Default is TRUE.
+#'
+#' @return An updated MIMIR object.
+#'
+#' @export
 add_anno_to_MIMIR <- function(mimir.obj, anno.obj, filter.genes=T){
   if(filter.genes){
     genes.keep.ind=which(anno.obj@gene.anno$gene%in%mimir.obj@genes)

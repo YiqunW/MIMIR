@@ -126,6 +126,20 @@ soft.cos.dist <- function(x, s){
   return(1-simM)
 }
 
+#' Blur Expression Data
+#'
+#' Applies a Gaussian blur to the expression data to smooth out temporal expression profiles.
+#'
+#' @param exp_data A gene by cell matrix with pseudotime as colnames.
+#' @param pt A numeric vector representing pseudotime values. Defaults to NULL.
+#' @param sd Standard deviation for the Gaussian blur. Default is 0.1.
+#' @param unlog A logical value indicating whether to unlog the data before processing. Default is TRUE.
+#' @param cutoff A numeric value representing the cutoff for the Gaussian distribution. Default is 3.
+#' @param return_nn A logical value indicating whether to return the number of non-zero elements after blurring. Default is FALSE.
+#'
+#' @return A matrix of the same dimensions as `exp_data`, with the expression data blurred. If `return_nn` is TRUE, returns a vector of non-zero elements.
+#'
+#' @export
 gauss.blur.matrix <- function(exp_data, pt=NULL, sd=0.1, unlog=T, cutoff=3, return_nn=F){
   #exp_data is a gene by cell matrix with pseudotime as colnames
   if(is.null(pt)){

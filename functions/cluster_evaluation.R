@@ -1,6 +1,15 @@
 library(mclust)
 library(aricode)
-## define function that calculate AMI and other metrics from the clustering results
+#' Compare Clustering Results
+#'
+#' This function calculates AMI and other metrics from the clustering results.
+#'
+#' @param clus_s A matrix where each column stores cluster membership from a clustering method.
+#' @param module_tbl A dataframe with columns 'gene' and 'level', representing the true module assignments.
+#'
+#' @return A matrix with AMI values for each clustering method.
+#'
+#' @export
 comp_par <- function(clus_s, module_tbl){
   g_use=intersect(rownames(clus_s),module_tbl$gene)
   module_tbl=module_tbl[module_tbl[,"gene"]%in%g_use,]
@@ -15,6 +24,18 @@ comp_par <- function(clus_s, module_tbl){
   return(results_m)
 }
 
+#' Fisher's Exact Test for Enrichment
+#'
+#' This function performs a Fisher's exact test to identify enriched annotations.
+#'
+#' @param genes A vector of genes to test for enrichment.
+#' @param gXm A binary matrix indicating gene-annotation relationships.
+#' @param p.adj.method Method for adjusting p-values. Default is "fdr".
+#' @param p.adj_only Boolean. If TRUE, only adjusted p-values are returned.
+#'
+#' @return A dataframe with enrichment results.
+#'
+#' @export
 fisher.exact.enrichment <- function(genes, gXm, p.adj.method="fdr", p.adj_only=FALSE) {
   # find the annotations in the group
   gXm=gXm[which(apply(gXm,1,sum)>0),]
@@ -57,6 +78,17 @@ fisher.exact.enrichment <- function(genes, gXm, p.adj.method="fdr", p.adj_only=F
   }
 }
 
+#' Convert Dataframe to Binary Matrix
+#'
+#' This function converts a dataframe to a binary matrix based on specified rows and columns.
+#'
+#' @param anno.tbl A dataframe with annotation information.
+#' @param rows The name of column to use as rows in the matrix.
+#' @param cols The name of column to use as columns in the matrix.
+#'
+#' @return A binary matrix.
+#'
+#' @export
 df2matrix <- function(anno.tbl, rows="gene", cols="id"){
   genes=unique(anno.tbl[,rows])
   ids=unique(anno.tbl[,cols])
@@ -64,7 +96,22 @@ df2matrix <- function(anno.tbl, rows="gene", cols="id"){
   genexanno[cbind(anno.tbl[,rows],anno.tbl[,cols])]=1
   return(genexanno)
 }
-## To compare performance with different modes of similarities (exp, func, or combined), get the names of expression and functional similarities used
+
+#' Assess Clustering Results
+#'
+#' This function assesses the performance of different clustering methods using various metrics.
+#'
+#' @param object An object containing clustering results and other relevant data.
+#' @param manual_modules Optional. A dataframe with true module assignments for comparison.
+#' @param return_df_only Boolean. If TRUE, only the dataframe of results is returned.
+#' @param internal_db_use Optional. Name of the internal annotation database to use.
+#' @param go_cat Optional. GO categories to include if using internal database.
+#' @param external_db_tbl Optional. A dataframe with external annotation data.
+#' @param verbose Boolean. If TRUE, prints progress messages.
+#'
+#' @return An object with updated cluster metrics or a dataframe of results.
+#'
+#' @export
 assess_result <- function(object, manual_modules=NULL, return_df_only=F, internal_db_use=NULL, go_cat=NULL, external_db_tbl=NULL, verbose=T){
   exp_sim=object@exp.sim
   exp_sim_names=dimnames(exp_sim)[[3]]
@@ -171,6 +218,18 @@ assess_result <- function(object, manual_modules=NULL, return_df_only=F, interna
   }
 }
 
+#' Add External Assessment Results
+#'
+#' This function adds external assessment results to the existing cluster metrics.
+#'
+#' @param object An object containing clustering results and other relevant data.
+#' @param return_df_only Boolean. If TRUE, only the dataframe of results is returned.
+#' @param external_db_tbl A dataframe with external annotation data.
+#' @param verbose Boolean. If TRUE, prints progress messages.
+#'
+#' @return An object with updated cluster metrics or a dataframe of results.
+#'
+#' @export
 add_external_assess <- function(object, return_df_only=F, external_db_tbl=NULL, verbose=T){
   if(dim(object@cluster_metrics)[1]==0){
     stop("No cluster_metrics calculated yet. Call assess_result() function first.")
@@ -219,6 +278,14 @@ add_external_assess <- function(object, return_df_only=F, external_db_tbl=NULL, 
 }
 
 library(plotly)
+#' Add Vertical Line to Plotly Plot
+#'
+#' @param x X-coordinate for the vertical line.
+#' @param color Color of the vertical line. Default is "grey".
+#'
+#' @return A list specifying the vertical line.
+#'
+#' @export
 vline <- function(x = 0, color = "grey") {
   return(list(
     type = "line",
@@ -231,6 +298,14 @@ vline <- function(x = 0, color = "grey") {
   ))
 }
 
+#' Add Horizontal Line to Plotly Plot
+#'
+#' @param y Y-coordinate for the horizontal line.
+#' @param color Color of the horizontal line. Default is "grey".
+#'
+#' @return A list specifying the horizontal line.
+#'
+#' @export
 hline <- function(y = 0, color = "grey") {
   return(list(
     type = "line",
@@ -242,6 +317,28 @@ hline <- function(y = 0, color = "grey") {
     line = list(color = color, dash="dot")
   ))
 }
+
+#' Create a Plotly Scatter Plot
+#'
+#' This function creates a scatter plot using Plotly with various customization options.
+#'
+#' @param data A dataframe containing the data to plot.
+#' @param x The name of the column to use for the x-axis.
+#' @param y The name of the column to use for the y-axis.
+#' @param color Optional. The name of the column to use for coloring the points.
+#' @param hover_text Optional. The name of the column to use for hover text.
+#' @param marker_opacity Opacity of the markers. Default is 0.5.
+#' @param marker_size Size of the markers. Default is 5.
+#' @param color_pal Color palette to use. Default is "Set1".
+#' @param addline_x Optional. X-coordinate for a vertical line to add.
+#' @param addline_y Optional. Y-coordinate for a horizontal line to add.
+#' @param ylab Optional. Label for the y-axis.
+#' @param xlab Optional. Label for the x-axis.
+#' @param figsize Optional. A vector specifying the width and height of the plot.
+#'
+#' @return A Plotly scatter plot.
+#'
+#' @export
 plotly_scatter <- function(data, x, y, color=NULL, hover_text=NULL, marker_opacity=0.5, marker_size=5, 
                            color_pal="Set1", addline_x=NULL, addline_y=NULL, ylab=NULL, xlab=NULL, figsize=NULL){
   if(is.null(color)){
@@ -277,6 +374,15 @@ plotly_scatter <- function(data, x, y, color=NULL, hover_text=NULL, marker_opaci
   return(fig)
 }
 
+#' Get Cluster Parameters
+#'
+#' This function extracts similarity and clustering method parameters from a given cluster.
+#'
+#' @param cluster_use A dataframe containing cluster information.
+#'
+#' @return A vector with similarity and clustering method parameters.
+#'
+#' @export
 get_cluster_pars <- function(cluster_use){
   similarity_use=cluster_use$similarity
   leiden_res_use=cluster_use$leiden_res
@@ -288,12 +394,32 @@ get_cluster_pars <- function(cluster_use){
   return(c(similarity_use, cluster_method))
 }
 
+#' Get Clusters from Object
+#'
+#' This function retrieves clusters from an object based on specified parameters.
+#'
+#' @param object An object containing clustering results and other relevant data.
+#' @param cluster_par A vector with similarity and clustering method parameters.
+#'
+#' @return A dataframe with cluster assignments.
+#'
+#' @export
 get_clusters <- function(object, cluster_par){
   clus.df=object@clusters[[cluster_par[1]]]
   clus=clus.df[,grepl(paste0("^",cluster_par[2]), colnames(clus.df)),drop=F]
   return(clus)
 }
 
+#' Add Cluster Results to Object
+#'
+#' This function adds cluster results to an object based on specified metrics.
+#'
+#' @param object An object containing clustering results and other relevant data.
+#' @param metric_use A dataframe with metrics to use for adding cluster results.
+#'
+#' @return An updated object with added cluster results.
+#'
+#' @export
 add_cluster_result <- function(object, metric_use){
   for(i in 1:dim(metric_use)[1]){
     cluster_par=get_cluster_pars(metric_use[i,,drop=F])
@@ -324,6 +450,24 @@ library(patchwork)
 library(Vennerable)
 library(cowplot)
 library(png)
+#' Plot Clusters
+#'
+#' This function generates plots for clusters using expression data and enrichment analysis.
+#'
+#' @param object An object containing clustering results and other relevant data.
+#' @param cluster_use The name of the cluster to plot.
+#' @param exp_use The expression data to use for plotting. Default is "smoothed.exp".
+#' @param ncols Number of columns in the plot layout. Default is 5.
+#' @param use_description Boolean. If TRUE, use descriptions for enrichment analysis. Default is TRUE.
+#' @param save_pdf Boolean or string. If TRUE, save the plot as a PDF. If string, use the string as the file name.
+#' @param save_width Width of the saved plot. Default is 20.
+#' @param save_height Height of the saved plot. Default is 40.
+#' @param return_plots Boolean. If TRUE, return the list of plots instead of displaying them.
+#' @param show_plot Boolean. If TRUE, display the plot.
+#'
+#' @return A list of plots if return_plots is TRUE.
+#'
+#' @export
 plotClusters <- function(object, cluster_use, exp_use=c("smoothed.exp","exp.data"),ncols=5,use_description=T,
                          save_pdf=F, save_width=20, save_height=40, return_plots=F,show_plot=T){
   if(is.character(save_pdf)){
@@ -441,6 +585,18 @@ plotClusters <- function(object, cluster_use, exp_use=c("smoothed.exp","exp.data
   }
 }
 
+#' Get Auto Module from Clusters
+#'
+#' This function generates modules from clusters, optionally naming them by enriched annotations.
+#'
+#' @param object An object containing clustering results and other relevant data.
+#' @param cluster_use The name of the cluster to use.
+#' @param name_by_enriched Boolean. If TRUE, name modules by enriched annotations.
+#' @param use_description Boolean. If TRUE, use descriptions for enrichment analysis. Default is TRUE.
+#'
+#' @return A list of modules.
+#'
+#' @export
 get_auto_module <- function(object, cluster_use, name_by_enriched=T, use_description=T){
   cluster_use=object@gene.info[,cluster_use,drop=F]
   clus.list=split(rownames(cluster_use), cluster_use)
@@ -493,6 +649,16 @@ get_auto_module <- function(object, cluster_use, name_by_enriched=T, use_descrip
   return(clus.list)
 }
 
+#' Save Modules to TSV
+#'
+#' This function saves modules to a TSV file.
+#'
+#' @param auto_module A list of modules to save.
+#' @param save_path The path to save the TSV file.
+#'
+#' @return None
+#'
+#' @export
 module2tsv <- function(auto_module, save_path){
   save_module=lapply(auto_module, paste, collapse=", ")
   names(save_module)=names(auto_module)

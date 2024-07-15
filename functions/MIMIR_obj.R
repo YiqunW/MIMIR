@@ -1,3 +1,22 @@
+#' MIMIR Class
+#'
+#' A class to represent MIMIR objects with various attributes related to gene expression data.
+#'
+#' @slot name A character string representing the name of the project.
+#' @slot exp.data A matrix representing the expression data, with genes as rownames and pseudotimes as colnames. Alternatively, pseudotimes can be provided directly into the pseudotime slot.
+#' @slot smoothed.exp A matrix representing the expression data smoothed (gaussian blurred) along time.
+#' @slot genes A vector of gene names.
+#' @slot pseudotime A vector of pseudotime values.
+#' @slot exp.dis An array representing expression distances (gene x gene x distance metric).
+#' @slot exp.sim An array representing expression similarities (gene x gene x similarity metric).
+#' @slot func.sim An array representing functional similarities (gene x gene x similarity metric).
+#' @slot integrated.sim An array representing integrated similarities (gene x gene x similarity metric).
+#' @slot clusters A list of clustering results.
+#' @slot cluster_metrics A data frame of metrics and statistics of clustering results using different parameters. Columns are quality metrics and rows are different clustering results.
+#' @slot annotations A list of annotations from different annotation databases.
+#' @slot gene.info A data frame containing gene information, such as expression onset times, clustering memberships, etc.
+#'
+#' @export
 MIMIR <- methods::setClass("MIMIR", 
                            slots = c(name="character",
                                      exp.data = "matrix",
@@ -14,6 +33,13 @@ MIMIR <- methods::setClass("MIMIR",
                                      gene.info = "data.frame"
                                      ))
 
+#' Show Method for MIMIR Class
+#'
+#' Displays a summary of the MIMIR object.
+#'
+#' @param object An object of class MIMIR.
+#'
+#' @export
 setMethod(f = "show", signature = "MIMIR",
           definition = function(object) {
             if(length(object@pseudotime)==0){
@@ -28,6 +54,18 @@ setMethod(f = "show", signature = "MIMIR",
             }
           )
 
+#' Create MIMIR Object
+#'
+#' Creates a new MIMIR object with the specified parameters.
+#'
+#' @param name A character string representing the name of the project.
+#' @param exp.data A matrix representing the expression data, with genes as rownames and pseudotimes as colnames. Alternatively, pseudotimes can be provided directly into the pseudotime slot.
+#' @param genes A vector of gene names. Defaults to NULL.
+#' @param pseudotime A vector of pseudotime values matching the column order in the exp.data matrix. Defaults to NULL.
+#'
+#' @return An object of class MIMIR.
+#'
+#' @export
 createMIMIR <- function(name, exp.data, genes = NULL, pseudotime = NULL) {
   if(is.null(genes)){
     genes=rownames(exp.data)
@@ -62,7 +100,25 @@ createMIMIR <- function(name, exp.data, genes = NULL, pseudotime = NULL) {
   return(object)
 } 
 
-
+#' Anno Class
+#'
+#' A class to represent annotation objects with various attributes related to gene annotations.
+#'
+#' @slot db A character string representing the database used.
+#' @slot gene.anno A data frame of gene annotations, with columns "gene", "id", "description"..
+#' @slot genes A vector of genes for which functional similarities are to be calculated.
+#' @slot bg.genes A vector of background genes used to adjust calculated similarities.
+#' @slot IC A vector of information content values of annotation terms.
+#' @slot cat.IC A list storing the information content of annotation terms for each GO category.
+#' @slot hierarchy.df A data frame storing the parent-child relations between annotation terms.
+#' @slot hierarchy.l A list representing the hierarchy of annotation terms.
+#' @slot descrip A data frame of descriptions.
+#' @slot similarity A matrix of gene x gene annotation similarities.
+#' @slot cat.similarity A list of similarity matrices for GO categories.
+#' @slot prior A numeric value of prior similarity value (mean similarity across the union of bg.genes and genes).
+#' @slot cat.prior A list of prior values for GO categories.
+#'
+#' @export
 Anno <- methods::setClass("Anno", 
                            slots = c(db="character",
                                      gene.anno="data.frame",
@@ -79,6 +135,13 @@ Anno <- methods::setClass("Anno",
                                      cat.prior="list"
                            ))
 
+#' Show Method for Anno Class
+#'
+#' Displays a summary of the Anno object.
+#'
+#' @param object An object of class Anno.
+#'
+#' @export
 setMethod(f = "show", signature = "Anno",
           definition = function(object) {
             cat("Anno object. Database used: ", object@db, ".\n")
@@ -86,6 +149,26 @@ setMethod(f = "show", signature = "Anno",
           }
 )
 
+#' Create Anno Object
+#'
+#' Creates a new Anno object with the specified parameters.
+#'
+#' @param db A character string representing the database used.
+#' @param gene.anno A data frame of gene annotations, with columns "gene", "id", "description"..
+#' @param gene.col The column name or index for genes in the gene.anno data frame.
+#' @param id.col The column name or index for annotation IDs in the gene.anno data frame.
+#' @param desp.col The column name or index for annotation descriptions in the gene.anno data frame. Defaults to NULL.
+#' @param cat.col The column name or index for categories of annotations in the gene.anno data frame. Defaults to NULL.
+#' @param genes A vector of genes for which functional similarities are to be calculated. Defaults to NULL.
+#' @param bg.genes A vector of background genes. Defaults to NULL.
+#' @param hierarchy.df A data frame storing the parent-child relations between annotation terms. Defaults to NULL.
+#' @param parent.col The column name or index for parent nodes in the hierarchy.df data frame. Defaults to 1.
+#' @param child.col The column name or index for child nodes in the hierarchy.df data frame. Defaults to 2.
+#' @param hierarchy.l A list representing the hierarchy of annotations. Defaults to NULL.
+#'
+#' @return An object of class Anno.
+#'
+#' @export
 createAnno <- function(db, gene.anno, gene.col='gene', id.col='id', desp.col=NULL, cat.col=NULL, genes = NULL, bg.genes = NULL, 
                        hierarchy.df=NULL, parent.col=1, child.col=2, hierarchy.l=NULL){
   gene.anno.use=data.frame('gene'=gene.anno[,gene.col], 'id'=gene.anno[,id.col])

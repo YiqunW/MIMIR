@@ -1,6 +1,20 @@
 require(abind)
 require(igraph)
 require(leiden)
+#' Integrate Expression and Annotation Data
+#'
+#' Integrate expression data and annotation data to generate a combined similarity matrix.
+#'
+#' @param expM A matrix of expression data.
+#' @param annoM A matrix of annotation data.
+#' @param method A string specifying the method to combine similarities. Default is "AND".
+#' @param genes A string specifying whether to use the inner or outer set of genes. Default is "inner".
+#' @param add A numeric value to adjust similarity scores. Default is 0.
+#' @param maxscale A numeric value to scale similarity scores.
+#'
+#' @return A combined similarity matrix.
+#'
+#' @export
 integrate_exp_anno <- function(expM, annoM, method=c("AND","OR","+"), genes=c("inner","outer"), add=0, maxscale=NULL){
   ## Test if both matrices contain the same genes
   if(!setequal(rownames(expM), rownames(annoM))){
@@ -54,6 +68,22 @@ integrate_exp_anno <- function(expM, annoM, method=c("AND","OR","+"), genes=c("i
   return(simM)
 }
 
+#' Integrate All Expression and Annotation Data
+#'
+#' Integrate all expression and annotation data to generate combined similarity matrices.
+#'
+#' @param object A MIMIR object containing the expression and annotation data.
+#' @param exp_use A vector of expression similarity methods to use. From the 3rd dimension names of the exp_use slot. Default is NULL.
+#' @param anno_use A vector of annotation similarity methods to use. From the 3rd dimension names of the anno_use slot. Default is NULL.
+#' @param method A string specifying the method to combine similarities. One of "AND", "+", and "OR". Default is "AND".
+#' @param add A numeric value to add to the similarity scores prior to integration. Default is 0.
+#' @param maxscale A numeric value to scale similarity scores.
+#' @param combine_genes A string specifying whether to use the inner or outer set of genes. Default is "outer".
+#' @param prt_process Boolean. Whether to print progress messages. Default is FALSE.
+#'
+#' @return A 3D array of combined similarity matrices.
+#'
+#' @export
 integrate_all_exp_anno <- function(object, exp_use=NULL, anno_use=NULL, method="AND", add=0, maxscale=NULL, combine_genes="outer", prt_process=F){
   #exp_sim, anno_sim, 
   exp_sim=object@exp.sim
@@ -86,6 +116,18 @@ integrate_all_exp_anno <- function(object, exp_use=NULL, anno_use=NULL, method="
   return(sim_integ)
 }
 
+#' Trim Adjacency Matrix
+#'
+#' Trim an adjacency matrix to keep a specified percentage of top values.
+#'
+#' @param adj_tbl An adjacency matrix.
+#' @param pct_kp The percentage of top values to keep.
+#' @param n_kp Optional. The number of top values to keep. Default is NULL.
+#' @param mode A string specifying the mode to trim the matrix. Default is "and".
+#'
+#' @return A trimmed adjacency matrix.
+#'
+#' @export
 trim_adj <- function(adj_tbl, pct_kp, n_kp=NULL, mode="and"){
   if(is.null(n_kp)){
     n_kp=dim(adj_tbl)[1]*pct_kp+1
@@ -101,6 +143,19 @@ trim_adj <- function(adj_tbl, pct_kp, n_kp=NULL, mode="and"){
   }
 }
 
+#' Perform Clustering on Adjacency Matrix
+#'
+#' Perform clustering on an adjacency matrix using various methods.
+#'
+#' @param adj_tbl An adjacency matrix.
+#' @param method A vector of strings specifying the clustering methods to use. Default is NULL.
+#' @param leiden_res A vector of resolution parameters for the Leiden algorithm. Default is 8.
+#' @param leiden_iter The number of iterations for the Leiden algorithm. Default is -1.
+#' @param ... Additional arguments for the clustering methods.
+#'
+#' @return A matrix of cluster assignments.
+#'
+#' @export
 igraph_cls <- function(adj_tbl, method=NULL,leiden_res=8, leiden_iter=-1,...){
   leiden_par=c("RBConfigurationVertexPartition")
   diag(adj_tbl) <- 0
@@ -200,6 +255,20 @@ igraph_cls <- function(adj_tbl, method=NULL,leiden_res=8, leiden_iter=-1,...){
   return(cls_tbl)
 }
 
+#' Cluster All Similarity Matrices
+#'
+#' Perform clustering on all similarity matrices in a 3D array.
+#'
+#' @param sim_3d A 3D array of similarity matrices.
+#' @param trim_adj Boolean. Whether to trim the adjacency matrix. Default is TRUE.
+#' @param n_kp The number of top values to keep in the adjacency matrix. Default is 120.
+#' @param method A vector of clustering methods to use. Default is c("louvain","infomap","leiden").
+#' @param leiden_res A vector of resolution parameters for the Leiden algorithm. Default is c(1, 3, 5).
+#' @param leiden_iter The number of iterations for the Leiden algorithm. Default is 50.
+#'
+#' @return A list of cluster assignments for each similarity matrix.
+#'
+#' @export
 cluster_all <- function(sim_3d, trim_adj=T, n_kp=120, method=c("louvain","infomap","leiden"),leiden_res=c(1,3,5),leiden_iter=50){
   clus_list=list()
   for(s in dimnames(sim_3d)[[3]]){
