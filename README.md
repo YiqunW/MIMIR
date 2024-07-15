@@ -31,47 +31,34 @@ A range of expression similarity/ distance metrics can be used (e.g. Euclidean, 
 ### Step 3: Calculate functional similarities between enriched genes
 In this step, input data are downloaded from the functional database websites and preprocessed by user (e.g. convert gene identifiers to match the gene names used in the scRNA-seq data, trim down the data tables to relevant genes). A list of background genes (e.g. all genes expressed in the embryo) are necessary to adjust scores from different databases if similarity scores from multiple databases are to be combined. In our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step3_Calculate_functional_similarities.md), we used the following functiobal databases: [Gene Ontology](https://geneontology.org/), [Reactome](https://reactome.org/), [InterPro](https://www.ebi.ac.uk/interpro/), and [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6). The first three contain annotation terms that are hierarchically organized. We modified functions from the R package [GOSemSim](https://bioconductor.org/packages/release/bioc/html/GOSemSim.html) to calculate the semantic similarities between genes' functional annotations from these databases. For instance:
 ```
-## reacAnno is a dataframe with columns 'gene' (gene names), 'id' (reactome annotation ids), and 'description' (optional, description of ids)
-## reac.p2c is a dataframe with a 'parent' column and a 'child' column describing the heirarchical relations between annotation ids
+## reacAnno and reac.p2c are tables downloaded from reactome site
 reactome = createAnno(db='Reactome', gene.anno = reacAnno, genes = noto.genes, bg.genes = background.genes,  hierarchy.df=reac.p2c)
-
-## compute information content of annotation terms for semantic similarity calculation
-reactome <- computeIC.anno(reactome)
-
-## compute pair-wise functional similarities between genes
-reactome <- func_sim(reactome, genes=reactome@genes)
+reactome <- computeIC.anno(reactome) ##compute information content of annotations
+reactome <- func_sim(reactome, genes=reactome@genes) ##compute pair-wise functional similarities between genes
 ```
 The [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6) provides protein-protein interaction likelihood scores between genes, which were used directly as similarity scores. Functional similarities calculated from different databases were combined following [the framework STRING database uses](https://string-db.org/cgi/help?sessionId=bYM4qN6d8EXf) for combining scores from different evidence channels.
 ```
-## organize similarities calculated from different databases into a 3d array
+## collect similarities calculated from different databases into a 3d array
 anno.sim.noto <- stack_func_sim(list("GO_bp"=go@cat.similarity$BP, "GO_mf"=go@cat.similarity$MF, "String"=str.sim.matrix,
                                   "Reactome"=reactome@similarity, "Interpro"=interpro@similarity), genes_use=noto.genes)
 
-## define which similarities to combine (two combinations specified below)
 comb = list("STRING+GO+Reactome+Interpro" = c("STRING", "GO_bp","Reactome", "Interpro"),
-            "Reactome+Interpro" = c("Reactome", "Interpro"))
-
-## combine similarities accordingly and add the combined scores to the 3d functional similarity array
-anno.sim.noto = add_combined_scores(anno.sim=anno.sim.noto, how.to=comb, add=T, verbose = T)
+            "Reactome+Interpro" = c("Reactome", "Interpro")) ## define how similarities should be combined
+anno.sim.noto = add_combined_scores(anno.sim=anno.sim.noto, how.to=comb, add=T)
 ```
 Annotation information is then saved into the MIMIR object created in Step 2 for use in the next step:
 ```
-## add single and combined functional similarities to the MIMIR object
-noto.obj <- add_to_MIMIR(noto.obj,anno.sim.noto)
-
-## add annotation information (gene-annotation association and annotation descriptions) to facilitate clustering result interpretation
-noto.obj <- add_anno_to_MIMIR(noto.obj, reactome)
+noto.obj <- add_to_MIMIR(noto.obj,anno.sim.noto) ## add functional similarities
+noto.obj <- add_anno_to_MIMIR(noto.obj, reactome) ## add gene-annotation tables
 ```
 
 ### Step 4: Cluster enriched genes using combined expression and functional similarities
 In this step, expression and functional similarities are integrated to serve as input to clustering algorithms. A few methods for similarity integration and clustering methods were tested in our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step4_Cluster_genes_with_integrated_similarities.md). Expression and functional similarities can be integrated by multiplication (AND), summation (+), and OR (STRING evidence integration method):
 ```
-sim <- integrate_all_exp_anno(noto.obj, exp_use=exp_use, anno_use=anno_use, method="AND",add=0, maxscale = 1)
-# change method to "+" or "OR" for different integration methods
-
+sim <- integrate_all_exp_anno(noto.obj, method="AND") ## can change method to "+" or "OR"
 noto.obj@integrated.sim <- sim
 ```
-To cluster the genes with integrated similarities:
+To cluster the genes with integrated similarities with a few clustering algorithms and parameters:
 ```
 noto.obj@clusters <- cluster_all(noto.obj@integrated.sim, method=c("louvain","infomap","leiden"), leiden_iter=50, leiden_res=c(2,4,6,8))
 ```
@@ -86,16 +73,18 @@ To calculate quality measures for clustering results:
 # msigdb_c2 is a gene-annotation table obtained from the MSigDB database
 noto.obj <- assess_result(noto.obj, manual_modules=module_subset, external_db_tbl=msigdb_c2)
 ```
-To visualize the calculated quality measures and to inspect the expression and functional coherence of clusters
+To visualize the calculated quality measures:
 ```
 plotly_scatter(noto.obj@cluster_metrics, x="n_cluster", y="max_cluster",color="similarity_mode", hover_text = "similarity")
 plotly_scatter(metric_tbl, x="pct_gene_in_cluster", y="AMI",color="similarity_mode") 
-
-# pick a result to plot each cluster
+```
+To pick a clustering result and inspect the expression and functional coherence in each cluster:
+```
 metric_tbl=noto.obj@cluster_metrics
-metric_use=metric_use[order(metric_use[["AMI"]], decreasing = T),][1,] #choose the result with the highest agreement with the manual curation
+# pick the result with the highest agreement with the manual curation:
+metric_use=metric_use[order(metric_use[["AMI"]], decreasing = T),][1,] 
 
-# add the chosen clustering result to @gene.info slot for fast access
+# add the chosen clustering result to @gene.info slot
 noto.obj<-add_cluster_result(noto.obj, metric_use)
 
 # plot gene expression and the top 3 enriched annotations in each cluster
