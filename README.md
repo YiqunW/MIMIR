@@ -1,22 +1,104 @@
 # MIMIR
 **MIMIR** is an approach for **M**odule **I**dentification via **M**ulti-source **I**ntegration for **R**econstructing Differentiation. Briefly, this approach groups genes into modules using both gene expression similarities from single-cell RNA sequencing (scRNA-seq) data and functional similarities from functional annotation databases. Each gene module contains genes that likely work together to drive a biological process during cell differentiation. MIMIR is part of our effort to extract biological insights from single-cell transcriptomic atlases and trajectories to understand how differentiation is regulated.
+
+# Usage
+Scripts in [functions](https://github.com/YiqunW/MIMIR/tree/main/functions) folder include all functions required for running MIMIR. To use these functions, download the R files in the folder and load them into your own script using the `source()` function. We recommend going through our examples in the [example_scripts](https://github.com/YiqunW/MIMIR/tree/main/example_scripts) folder to get started. To run the example scripts on your local machine, files in [example_data](https://github.com/YiqunW/MIMIR/tree/main/example_data) will be needed. You can download individual scripts and data files required, or download the entire repository (`Code` >> `Download ZIP`, or run `git clone https://github.com/YiqunW/MIMIR.git` in your terminal). 
+
 ## Inputs
 1. scRNA-seq data from different stages of cell differentiation. In our example, we use the zebrafish notochord and hatching gland single-cell transcriptomes extracted from datasets published in [Farrell et al. 2018](https://pubmed.ncbi.nlm.nih.gov/29700225/) and [Raj et al. 2020](https://pubmed.ncbi.nlm.nih.gov/33068532/), which covers 17 time points from 3 to 24 hours post fertilization (hpf), during which the notochord and hatching gland cells are specified and differentiate into functionally and structurally specialized cells. 
 2. Functional annotations of genes highly expressed during differentiation. In our example, we use annotations from [Gene Ontology](https://geneontology.org/), [Reactome](https://reactome.org/), and [InterPro](https://www.ebi.ac.uk/interpro/). We additionally use the [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6), which provides protein-protein interaction predictions.
+
 ## Steps in Module Identification
 MIMIR involves 5 major steps:
-1. Identify enriched genes during differentiation
-2. Calculate expression similarities between enriched genes
-3. Calculate functional similarities between enriched genes
-4. Cluster enriched genes using combined expression and functional similarities
-5. Annotation and curate the resulting gene modules
+
 ### Step 1: Identify enriched genes during differentiation
-Genes that are more highly expressed in the cell type of interest compared to background cell types can be identified using appropriate differential expression tests. In our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step1_Identify_Enriched_Genes.md), we segmented the notochord transcriptional trajectory into small time windows, and identified genes that show stronger expression in the notochord compared to the rest of the embryo in each time window using a precision-recall curve (AUCPR).
+Genes that are more highly expressed in the cell type of interest compared to background cell types can be identified using appropriate differential expression tests. In our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step1_Identify_Enriched_Genes.md), we segmented the notochord transcriptional trajectory into small time windows, and identified genes that show stronger expression in the notochord compared to the rest of the embryo in each time window using a precision-recall curve (AUCPR). Alternative methods can be used for different systems. **The output from this step required for the next steps are**:
+1. A list of cell type enriched genes (e.g. [genes.noto.txt](https://github.com/YiqunW/MIMIR/blob/main/example_results/genes.noto.txt))
+2. The gene expression matrix (normalized and in log space) with enriched genes as rows and pseudotime as columns (e.g. [notochord_GeneByPseudotime.csv](https://github.com/YiqunW/MIMIR/blob/main/example_data/notochord_GeneByPseudotime.csv))
+
 ### Step 2: Calculate expression similarities between enriched genes
-Expression similarities between enriched genes are calculated by comparing their sc-expression patterns during differentiation. We tested a range of expression distance metrics in our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step2_Calculate_expression_similarities.md), including Euclidean distance, (soft) cosine distance, Canberra distance, and Jensen-Shannon divergence. 
+Expression similarities between enriched genes are calculated in this step. First, a MIMIR object is created with the enriched genes by pseudotime expression matrix from the last step:
+```
+noto.obj <- createMIMIR(name="Notochord", exp.data=as.matrix(noto.exp))
+```
+Then, expression similarities between genes are calculated:
+```
+noto.obj@exp.dis <- exp_dis(x=noto.obj@exp.data, methods=c("cosine", "soft_cosine", "euclidean", "JS"))
+noto.obj@exp.sim <- all_dist_to_sim(noto.obj@exp.dis, max.score = 0.95)
+```
+A range of expression similarity/ distance metrics can be used (e.g. Euclidean, (soft) cosine, Jensen-Shannon). See our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step2_Calculate_expression_similarities.md). The resulting object (`noto.obj`) will be needed in later steps. 
+
 ### Step 3: Calculate functional similarities between enriched genes
-Functional annotation databases such as [Gene Ontology](https://geneontology.org/), [Reactome](https://reactome.org/), [InterPro](https://www.ebi.ac.uk/interpro/), and [HGNC](https://www.genenames.org/) each contains annotation terms that are hierarchically organized. We derived genes' functional similarities from the semantic similarities between their annotations. The idea behind semantic similarity between annotation terms is that annotations for similar functions should have a close relationship in the hierarchical structure. Algorithms in the R package [GOSemSim](https://bioconductor.org/packages/release/bioc/html/GOSemSim.html) were adapted to calculate the semantic similarities between funcitonal annotations. The [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6) provides protein-protein interaction likelihood scores between genes, which were used directly as similarity scores. Functional similarities calculated from different databases were combined following [the framework STRING database uses](https://string-db.org/cgi/help?sessionId=bYM4qN6d8EXf) for combining scores from different evidence channels. See our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step3_Calculate_functional_similarities.md) for how we calculate funcitonal similarities between notochord enriched genes.
+In this step, input data are downloaded from the functional database websites and preprocessed by user (e.g. convert gene identifiers to match the gene names used in the scRNA-seq data, trim down the data tables to relevant genes). A list of background genes (e.g. all genes expressed in the embryo) are necessary to adjust scores from different databases if similarity scores from multiple databases are to be combined. In our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step3_Calculate_functional_similarities.md), we used the following functiobal databases: [Gene Ontology](https://geneontology.org/), [Reactome](https://reactome.org/), [InterPro](https://www.ebi.ac.uk/interpro/), and [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6). The first three contain annotation terms that are hierarchically organized. We modified functions from the R package [GOSemSim](https://bioconductor.org/packages/release/bioc/html/GOSemSim.html) to calculate the semantic similarities between genes' functional annotations from these databases. For instance:
+```
+## reacAnno is a dataframe with columns 'gene' (gene names), 'id' (reactome annotation ids), and 'description' (optional, description of ids)
+## reac.p2c is a dataframe with a 'parent' column and a 'child' column describing the heirarchical relations between annotation ids
+reactome = createAnno(db='Reactome', gene.anno = reacAnno, genes = noto.genes, bg.genes = background.genes,  hierarchy.df=reac.p2c)
+
+## compute information content of annotation terms for semantic similarity calculation
+reactome <- computeIC.anno(reactome)
+
+## compute pair-wise functional similarities between genes
+reactome <- func_sim(reactome, genes=reactome@genes)
+```
+The [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6) provides protein-protein interaction likelihood scores between genes, which were used directly as similarity scores. Functional similarities calculated from different databases were combined following [the framework STRING database uses](https://string-db.org/cgi/help?sessionId=bYM4qN6d8EXf) for combining scores from different evidence channels.
+```
+## organize similarities calculated from different databases into a 3d array
+anno.sim.noto <- stack_func_sim(list("GO_bp"=go@cat.similarity$BP, "GO_mf"=go@cat.similarity$MF, "String"=str.sim.matrix,
+                                  "Reactome"=reactome@similarity, "Interpro"=interpro@similarity), genes_use=noto.genes)
+
+## define which similarities to combine (two combinations specified below)
+comb = list("STRING+GO+Reactome+Interpro" = c("STRING", "GO_bp","Reactome", "Interpro"),
+            "Reactome+Interpro" = c("Reactome", "Interpro"))
+
+## combine similarities accordingly and add the combined scores to the 3d functional similarity array
+anno.sim.noto = add_combined_scores(anno.sim=anno.sim.noto, how.to=comb, add=T, verbose = T)
+```
+Annotation information is then saved into the MIMIR object created in Step 2 for use in the next step:
+```
+## add single and combined functional similarities to the MIMIR object
+noto.obj <- add_to_MIMIR(noto.obj,anno.sim.noto)
+
+## add annotation information (gene-annotation association and annotation descriptions) to facilitate clustering result interpretation
+noto.obj <- add_anno_to_MIMIR(noto.obj, reactome)
+```
+
 ### Step 4: Cluster enriched genes using combined expression and functional similarities
-Expression and functional similarities can be combined using various methods. In our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step4_Cluster_genes_with_combined_similarities.md), a simple multiplication between scaled expression and functional similarities worked well. Leiden clustering can be used to cluster enriched genes into initial modules.
+In this step, expression and functional similarities are integrated to serve as input to clustering algorithms. A few methods for similarity integration and clustering methods were tested in our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step4_Cluster_genes_with_integrated_similarities.md). Expression and functional similarities can be integrated by multiplication (AND), summation (+), and OR (STRING evidence integration method):
+```
+sim <- integrate_all_exp_anno(noto.obj, exp_use=exp_use, anno_use=anno_use, method="AND",add=0, maxscale = 1)
+# change method to "+" or "OR" for different integration methods
+
+noto.obj@integrated.sim <- sim
+```
+To cluster the genes with integrated similarities:
+```
+noto.obj@clusters <- cluster_all(noto.obj@integrated.sim, method=c("louvain","infomap","leiden"), leiden_iter=50, leiden_res=c(2,4,6,8))
+```
+The object with clustering results will be used for the next step.
+
 ### Step 5: Annotate and curate the resulting gene modules
-We choose a clustering result to serve as the basis of the gene modules (see [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step5_Check_clustering_results.md)). We then use a self-built [Shiny app]() to facilitate the inspection, annotation, and curation of the clustering results to produce the final gene modules. 
+The previous steps generated a multitude of clustering results based on the range of parameters tested (e.g. different expression and functional similarities used, different methods of combining the similarities, different clustering parameters, etc.). We choose a clustering result to serve as the basis of the gene modules (see [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step5_Check_clustering_results.md)). To choose the best clustering result, we compute and visualize several metrics and statistics for each resulting partition, such as the number of clusters, percent of genes included in non-singlet clusters, size of the largest cluster, mean within-cluster gene correlation, and more. When manually curated modules (with a subset of genes) or additional gene annotations are available, they can be used to provide additional cluster quality measures, such as the agreement with manual curation measured by adjusted mutual information (AMI) and enrichment of external functional annotations measured by p-vals.
+
+To calculate quality measures for clustering results:
+```
+# module_subset is a table of manually curated gene modules that included a subset of noto.genes
+# msigdb_c2 is a gene-annotation table obtained from the MSigDB database
+noto.obj <- assess_result(noto.obj, manual_modules=module_subset, external_db_tbl=msigdb_c2)
+```
+To visualize the calculated quality measures and to inspect the expression and functional coherence of clusters
+```
+plotly_scatter(noto.obj@cluster_metrics, x="n_cluster", y="max_cluster",color="similarity_mode", hover_text = "similarity")
+plotly_scatter(metric_tbl, x="pct_gene_in_cluster", y="AMI",color="similarity_mode") 
+
+# pick a result to plot each cluster
+metric_tbl=noto.obj@cluster_metrics
+metric_use=metric_use[order(metric_use[["AMI"]], decreasing = T),][1,] #choose the result with the highest agreement with the manual curation
+
+# add the chosen clustering result to @gene.info slot for fast access
+noto.obj<-add_cluster_result(noto.obj, metric_use)
+
+# plot gene expression and the top 3 enriched annotations in each cluster
+cluster_use=colnames(noto.obj@gene.info)[dim(noto.obj@gene.info)[2]]
+cluster_plots = plotClusters(noto.obj, cluster_use=cluster_use, exp_use="smoothed.exp", save_pdf="../example_results/cluster_plots1.pdf") 
+``
