@@ -38,10 +38,9 @@ reactome <- func_sim(reactome, genes=reactome@genes) ##compute pair-wise functio
 ```
 The [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6) provides protein-protein interaction likelihood scores between genes, which were used directly as similarity scores. Functional similarities calculated from different databases were combined following [the framework STRING database uses](https://string-db.org/cgi/help?sessionId=bYM4qN6d8EXf) for combining scores from different evidence channels.
 ```
-## collect similarities calculated from different databases into a 3d array
-anno.sim.noto <- stack_func_sim(list("GO_bp"=go@cat.similarity$BP, "GO_mf"=go@cat.similarity$MF, "String"=str.sim.matrix,
-                                  "Reactome"=reactome@similarity, "Interpro"=interpro@similarity), genes_use=noto.genes)
-
+anno.sim.noto <- stack_func_sim(list("GO_bp"=go@cat.similarity$BP, "String"=str.sim.matrix,
+                                     "Reactome"=reactome@similarity, "Interpro"=interpro@similarity), 
+                                genes_use=noto.genes) ## collect similarities from different databases into a 3d array
 comb = list("STRING+GO+Reactome+Interpro" = c("STRING", "GO_bp","Reactome", "Interpro"),
             "Reactome+Interpro" = c("Reactome", "Interpro")) ## define how similarities should be combined
 anno.sim.noto = add_combined_scores(anno.sim=anno.sim.noto, how.to=comb, add=T)
@@ -90,4 +89,4 @@ noto.obj<-add_cluster_result(noto.obj, metric_use)
 # plot gene expression and the top 3 enriched annotations in each cluster
 cluster_use=colnames(noto.obj@gene.info)[dim(noto.obj@gene.info)[2]]
 cluster_plots = plotClusters(noto.obj, cluster_use=cluster_use, exp_use="smoothed.exp", save_pdf="../example_results/cluster_plots1.pdf") 
-``
+```
