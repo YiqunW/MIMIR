@@ -659,12 +659,18 @@ get_auto_module <- function(object, cluster_use, name_by_enriched=T, use_descrip
 #' @return None
 #'
 #' @export
-module2tsv <- function(auto_module, save_path){
+module2tsv <- function(auto_module, save_path, return_df=F){
   save_module=lapply(auto_module, paste, collapse=", ")
   names(save_module)=names(auto_module)
   save_df=as.data.frame(t(data.frame(save_module)))
+  rownames(save_df)=names(save_module)
   colnames(save_df)=c("member")
   save_df$name=rownames(save_df)
   save_df=save_df[,c('name','member')]
-  write.table(save_df, save_path, quote = F, row.names = F, sep="\t")
+  if(!is.null(save_path)){
+    write.table(save_df, save_path, quote = F, row.names = F, sep="\t")
+  }
+  if(return_df){
+    return(save_df)
+  }
 }
