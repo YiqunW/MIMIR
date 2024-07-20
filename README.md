@@ -82,16 +82,13 @@ plotly_scatter(noto.obj@cluster_metrics, x="n_cluster", y="max_cluster",color="s
 plotly_scatter(metric_tbl, x="pct_gene_in_cluster", y="AMI",color="similarity_mode") 
 ```
 
-To pick a clustering result and inspect the expression and functional coherence in each cluster:
+Pick a clustering result and inspect the expression and functional coherence in each cluster:
 ```r
-metric_tbl=noto.obj@cluster_metrics
 # pick the result with the highest agreement with the manual curation:
-metric_use=metric_use[order(metric_use[["AMI"]], decreasing = T),][1,] 
-
-# add the chosen clustering result to @gene.info slot
-noto.obj<-add_cluster_result(noto.obj, metric_use)
+metric_tbl=noto.obj@cluster_metrics
+metric_best=metric_tbl[order(metric_tbl[["AMI"]], decreasing = T),][1,] 
 
 # plot gene expression and the top 3 enriched annotations in each cluster
-cluster_use=colnames(noto.obj@gene.info)[dim(noto.obj@gene.info)[2]]
-cluster_plots = plotClusters(noto.obj, cluster_use=cluster_use, exp_use="smoothed.exp", save_pdf="../example_results/cluster_plots1.pdf") 
+cluster_plots = plotClusters(noto.obj, cluster_use=get_clusters(noto.obj, metric_best), exp_use="smoothed.exp", 
+                             save_pdf="../example_results/cluster_plots1.pdf") 
 ```

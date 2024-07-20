@@ -405,6 +405,9 @@ get_cluster_pars <- function(cluster_use){
 #'
 #' @export
 get_clusters <- function(object, cluster_par){
+  if(length(cluster_par)>2){
+    cluster_par=get_cluster_pars(cluster_par)
+  }
   clus.df=object@clusters[[cluster_par[1]]]
   clus=clus.df[,grepl(paste0("^",cluster_par[2]), colnames(clus.df)),drop=F]
   return(clus)
@@ -475,7 +478,9 @@ plotClusters <- function(object, cluster_use, exp_use=c("smoothed.exp","exp.data
       save_pdf=paste0(save_pdf,'.pdf')
     }
   }
-  cluster_use=object@gene.info[,cluster_use,drop=F]
+  if(is.character(cluster_use)){
+    cluster_use=object@gene.info[,cluster_use,drop=F]
+  }
   subexpr = slot(object, exp_use)
   if(dim(subexpr)[1]==0){ #if input is smoothed.exp but smoothed version of expression has not been calculated, calculate it first
     ## calculate smoothed expression requires pseudotime
