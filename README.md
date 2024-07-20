@@ -32,14 +32,14 @@ A range of expression similarity/ distance metrics can be used (e.g. Euclidean, 
 Annotation data downloaded from the functional databases is needed in this step. In our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step3_Calculate_functional_similarities.md), we used the following functiobal databases: [Gene Ontology](https://geneontology.org/), [Reactome](https://reactome.org/), [InterPro](https://www.ebi.ac.uk/interpro/), and [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6). The first three contain annotation terms that are hierarchically organized. We calculate the semantic similarities between genes based on each database:
 ```r
 ## reacAnno and reac.p2c are tables downloaded from reactome site
-reactome = createAnno(db='Reactome', gene.anno = reacAnno, genes = noto.genes, bg.genes = background.genes,  hierarchy.df=reac.p2c)
+reactome <- createAnno(db='Reactome', gene.anno = reacAnno, genes = noto.genes, bg.genes = background.genes,  hierarchy.df=reac.p2c)
 reactome <- computeIC.anno(reactome) ##compute information content of annotations
 reactome <- func_sim(reactome, genes=reactome@genes) ##compute pair-wise functional similarities between genes
 ```
 The [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6) provides protein-protein interaction scores between genes, which can be used directly as similarity scores. Scores calculated from different databases are combined into one functional similarity score per gene pair:
 ```r
 ## collect similarities from different databases into a 3d array
-anno.sim.noto <- stack_func_sim(list("String"=str.sim.matrix, "Reactome"=reactome@similarity, genes_use=noto.genes)
+anno.sim.noto = stack_func_sim(list("String"=str.sim.matrix, "Reactome"=reactome@similarity, genes_use=noto.genes)
 ## combine similartities from different databases and add to the 3d array
 anno.sim.noto = add_combined_scores(anno.sim=anno.sim.noto, 
                                     how.to=list("STRING+Reactome" = c("STRING", "Reactome")), add=T)
@@ -85,8 +85,8 @@ plotly_scatter(metric_tbl, x="pct_gene_in_cluster", y="AMI",color="similarity_mo
 Pick a clustering result and inspect the expression and functional coherence in each cluster:
 ```r
 # pick the result with the highest agreement with the manual curation:
-metric_tbl=noto.obj@cluster_metrics
-metric_best=metric_tbl[order(metric_tbl[["AMI"]], decreasing = T),][1,] 
+metric_tbl = noto.obj@cluster_metrics
+metric_best = metric_tbl[order(metric_tbl[["AMI"]], decreasing = T),][1,] 
 
 # plot gene expression and the top 3 enriched annotations in each cluster
 cluster_plots = plotClusters(noto.obj, cluster_use=get_clusters(noto.obj, metric_best), exp_use="smoothed.exp", 
