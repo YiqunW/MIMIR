@@ -12,7 +12,8 @@ Genes that are more highly expressed in the cell type of interest compared to ba
 1. A list of cell type enriched genes (e.g. [genes.noto.txt](https://github.com/YiqunW/MIMIR/blob/main/example_results/genes.noto.txt))
 2. The gene expression matrix (normalized and in log space) with enriched genes as rows and pseudotime as columns (e.g. [notochord_GeneByPseudotime.csv](https://github.com/YiqunW/MIMIR/blob/main/example_data/notochord_GeneByPseudotime.csv))
 
-
+&nbsp;
+&nbsp;
 
 ### Step 2: Calculate expression similarities between enriched genes
 First, a MIMIR object is created with the enriched genes by pseudotime expression matrix from the last step:
