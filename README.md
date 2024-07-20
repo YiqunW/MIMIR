@@ -18,26 +18,26 @@ Genes that are more highly expressed in the cell type of interest compared to ba
 
 ### Step 2: Calculate expression similarities between enriched genes
 Expression similarities between enriched genes are calculated in this step. First, a MIMIR object is created with the enriched genes by pseudotime expression matrix from the last step:
-```
+```r
 noto.obj <- createMIMIR(name="Notochord", exp.data=as.matrix(noto.exp))
 ```
 Then, expression similarities between genes are calculated:
-```
+```r
 noto.obj@exp.dis <- exp_dis(x=noto.obj@exp.data, methods=c("cosine", "soft_cosine", "euclidean", "JS"))
 noto.obj@exp.sim <- all_dist_to_sim(noto.obj@exp.dis, max.score = 0.95)
 ```
 A range of expression similarity/ distance metrics can be used (e.g. Euclidean, (soft) cosine, Jensen-Shannon). See our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step2_Calculate_expression_similarities.md). The resulting object (`noto.obj`) will be needed in later steps. 
 
 ### Step 3: Calculate functional similarities between enriched genes
-In this step, input data are downloaded from the functional database websites and preprocessed by user (e.g. convert gene identifiers to match the gene names used in the scRNA-seq data, trim down the data tables to relevant genes). A list of background genes (e.g. all genes expressed in the embryo) are necessary to adjust scores from different databases if similarity scores from multiple databases are to be combined. In our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step3_Calculate_functional_similarities.md), we used the following functiobal databases: [Gene Ontology](https://geneontology.org/), [Reactome](https://reactome.org/), [InterPro](https://www.ebi.ac.uk/interpro/), and [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6). The first three contain annotation terms that are hierarchically organized. We modified functions from the R package [GOSemSim](https://bioconductor.org/packages/release/bioc/html/GOSemSim.html) to calculate the semantic similarities between genes' functional annotations from these databases. For instance:
-```
+In this step, annotation data is downloaded from the functional database websites and preprocessed by user (e.g. convert gene identifiers to match the gene names used in the scRNA-seq data, trim down the data tables to relevant genes). A list of background genes (e.g. all genes expressed in the embryo) are necessary to adjust scores if multiple databases are to be combined. In our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step3_Calculate_functional_similarities.md), we used the following functiobal databases: [Gene Ontology](https://geneontology.org/), [Reactome](https://reactome.org/), [InterPro](https://www.ebi.ac.uk/interpro/), and [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6). The first three contain annotation terms that are hierarchically organized. We calculate the semantic similarities between genes based on each database:
+```r
 ## reacAnno and reac.p2c are tables downloaded from reactome site
 reactome = createAnno(db='Reactome', gene.anno = reacAnno, genes = noto.genes, bg.genes = background.genes,  hierarchy.df=reac.p2c)
 reactome <- computeIC.anno(reactome) ##compute information content of annotations
 reactome <- func_sim(reactome, genes=reactome@genes) ##compute pair-wise functional similarities between genes
 ```
-The [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6) provides protein-protein interaction likelihood scores between genes, which were used directly as similarity scores. Functional similarities calculated from different databases were combined following [the framework STRING database uses](https://string-db.org/cgi/help?sessionId=bYM4qN6d8EXf) for combining scores from different evidence channels.
-```
+The [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6) provides protein-protein interaction likelihood scores between genes, which were used directly as similarity scores. Functional similarities calculated from different databases were combined:
+```r
 anno.sim.noto <- stack_func_sim(list("GO_bp"=go@cat.similarity$BP, "String"=str.sim.matrix,
                                      "Reactome"=reactome@similarity, "Interpro"=interpro@similarity), 
                                 genes_use=noto.genes) ## collect similarities from different databases into a 3d array
@@ -45,40 +45,40 @@ comb = list("STRING+GO+Reactome+Interpro" = c("STRING", "GO_bp","Reactome", "Int
             "Reactome+Interpro" = c("Reactome", "Interpro")) ## define how similarities should be combined
 anno.sim.noto = add_combined_scores(anno.sim=anno.sim.noto, how.to=comb, add=T)
 ```
-Annotation information is then saved into the MIMIR object created in Step 2 for use in the next step:
-```
+Annotation information is then saved into the MIMIR object created in Step 2:
+```r
 noto.obj <- add_to_MIMIR(noto.obj,anno.sim.noto) ## add functional similarities
 noto.obj <- add_anno_to_MIMIR(noto.obj, reactome) ## add gene-annotation tables
 ```
 
 ### Step 4: Cluster enriched genes using combined expression and functional similarities
-In this step, expression and functional similarities are integrated to serve as input to clustering algorithms. A few methods for similarity integration and clustering methods were tested in our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step4_Cluster_genes_with_integrated_similarities.md). Expression and functional similarities can be integrated by multiplication (AND), summation (+), and OR (STRING evidence integration method):
-```
+In this step, expression and functional similarities are integrated. A few methods for similarity integration and clustering methods were tested in our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step4_Cluster_genes_with_integrated_similarities.md). Expression and functional similarities can be integrated by multiplication (AND), summation (+), and adjusted combined probability (OR):
+```r
 sim <- integrate_all_exp_anno(noto.obj, method="AND") ## can change method to "+" or "OR"
 noto.obj@integrated.sim <- sim
 ```
 To cluster the genes with integrated similarities with a few clustering algorithms and parameters:
-```
+```r
 noto.obj@clusters <- cluster_all(noto.obj@integrated.sim, method=c("louvain","infomap","leiden"), leiden_iter=50, leiden_res=c(2,4,6,8))
 ```
 The object with clustering results will be used for the next step.
 
 ### Step 5: Annotate and curate the resulting gene modules
-The previous steps generated a multitude of clustering results based on the range of parameters tested (e.g. different expression and functional similarities used, different methods of combining the similarities, different clustering parameters, etc.). We choose a clustering result to serve as the basis of the gene modules (see [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step5_Check_clustering_results.md)). To choose the best clustering result, we compute and visualize several metrics and statistics for each resulting partition, such as the number of clusters, percent of genes included in non-singlet clusters, size of the largest cluster, mean within-cluster gene correlation, and more. When manually curated modules (with a subset of genes) or additional gene annotations are available, they can be used to provide additional cluster quality measures, such as the agreement with manual curation measured by adjusted mutual information (AMI) and enrichment of external functional annotations measured by p-vals.
+The previous steps generated a multitude of clustering results with different similarities and parameters tested. In this step, we will choose the best clustering result to serve as the basis of the gene modules (see [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step5_Check_clustering_results.md)). To do this, we inspect several metrics and statistics for each clustering result, such as the number of clusters, percent of genes included in non-singlet clusters, size of the largest cluster, mean within-cluster gene correlation, and more. When manually curated modules (with a subset of genes) or additional gold-standard gene annotations are available, they can be used to assess the clustering results too.
 
 To calculate quality measures for clustering results:
-```
+```r
 # module_subset is a table of manually curated gene modules that included a subset of noto.genes
 # msigdb_c2 is a gene-annotation table obtained from the MSigDB database
 noto.obj <- assess_result(noto.obj, manual_modules=module_subset, external_db_tbl=msigdb_c2)
 ```
 To visualize the calculated quality measures:
-```
+```r
 plotly_scatter(noto.obj@cluster_metrics, x="n_cluster", y="max_cluster",color="similarity_mode", hover_text = "similarity")
 plotly_scatter(metric_tbl, x="pct_gene_in_cluster", y="AMI",color="similarity_mode") 
 ```
 To pick a clustering result and inspect the expression and functional coherence in each cluster:
-```
+```r
 metric_tbl=noto.obj@cluster_metrics
 # pick the result with the highest agreement with the manual curation:
 metric_use=metric_use[order(metric_use[["AMI"]], decreasing = T),][1,] 
