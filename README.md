@@ -13,6 +13,7 @@ Genes that are more highly expressed in the cell type of interest compared to ba
 2. The gene expression matrix (normalized and in log space) with enriched genes as rows and pseudotime as columns (e.g. [notochord_GeneByPseudotime.csv](https://github.com/YiqunW/MIMIR/blob/main/example_data/notochord_GeneByPseudotime.csv))
 
 
+
 ### Step 2: Calculate expression similarities between enriched genes
 First, a MIMIR object is created with the enriched genes by pseudotime expression matrix from the last step:
 ```r
@@ -24,6 +25,7 @@ noto.obj@exp.dis <- exp_dis(x=noto.obj@exp.data, methods=c("cosine", "soft_cosin
 noto.obj@exp.sim <- all_dist_to_sim(noto.obj@exp.dis, max.score = 0.95)
 ```
 A range of expression similarity/ distance metrics can be used (e.g. Euclidean, (soft) cosine, Jensen-Shannon). See our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step2_Calculate_expression_similarities.md). The resulting object (`noto.obj`) will be needed in later steps. 
+
 
 
 ### Step 3: Calculate functional similarities between enriched genes
@@ -49,6 +51,7 @@ noto.obj <- add_anno_to_MIMIR(noto.obj, reactome) ## add gene-annotation tables
 ```
 
 
+
 ### Step 4: Cluster enriched genes using combined expression and functional similarities
 In this step, expression and functional similarities are integrated. A few methods for similarity integration and clustering methods were tested in our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step4_Cluster_genes_with_integrated_similarities.md). Expression and functional similarities can be integrated by multiplication (AND), summation (+), and adjusted combined probability (OR):
 ```r
@@ -60,6 +63,7 @@ To cluster the genes with integrated similarities with a few clustering algorith
 noto.obj@clusters <- cluster_all(noto.obj@integrated.sim, method=c("louvain","infomap","leiden"), leiden_iter=50, leiden_res=c(2,4,6,8))
 ```
 The object with clustering results will be used for the next step.
+
 
 
 ### Step 5: Annotate and curate the resulting gene modules
