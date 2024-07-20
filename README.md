@@ -14,7 +14,6 @@ Genes that are more highly expressed in the cell type of interest compared to ba
 
 &nbsp;
 &nbsp;
-
 ### Step 2: Calculate expression similarities between enriched genes
 First, a MIMIR object is created with the enriched genes by pseudotime expression matrix from the last step:
 ```r
@@ -27,8 +26,8 @@ noto.obj@exp.sim <- all_dist_to_sim(noto.obj@exp.dis, max.score = 0.95)
 ```
 A range of expression similarity/ distance metrics can be used (e.g. Euclidean, (soft) cosine, Jensen-Shannon). See our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step2_Calculate_expression_similarities.md). The resulting object (`noto.obj`) will be needed in later steps. 
 
-
-
+&nbsp;
+&nbsp;
 ### Step 3: Calculate functional similarities between enriched genes
 Annotation data downloaded from the functional databases is needed in this step. In our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step3_Calculate_functional_similarities.md), we used the following functiobal databases: [Gene Ontology](https://geneontology.org/), [Reactome](https://reactome.org/), [InterPro](https://www.ebi.ac.uk/interpro/), and [STRING database](https://string-db.org/cgi/download?sessionId=bykC2Can3gR6). The first three contain annotation terms that are hierarchically organized. We calculate the semantic similarities between genes based on each database:
 ```r
@@ -51,8 +50,8 @@ noto.obj <- add_to_MIMIR(noto.obj,anno.sim.noto) ## add functional similarities
 noto.obj <- add_anno_to_MIMIR(noto.obj, reactome) ## add gene-annotation tables
 ```
 
-
-
+&nbsp;
+&nbsp;
 ### Step 4: Cluster enriched genes using combined expression and functional similarities
 In this step, expression and functional similarities are integrated. A few methods for similarity integration and clustering methods were tested in our [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step4_Cluster_genes_with_integrated_similarities.md). Expression and functional similarities can be integrated by multiplication (AND), summation (+), and adjusted combined probability (OR):
 ```r
@@ -65,8 +64,8 @@ noto.obj@clusters <- cluster_all(noto.obj@integrated.sim, method=c("louvain","in
 ```
 The object with clustering results will be used for the next step.
 
-
-
+&nbsp;
+&nbsp;
 ### Step 5: Annotate and curate the resulting gene modules
 The previous steps generated a multitude of clustering results with different similarities and parameters tested. In this step, we will choose the best clustering result to serve as the basis of the gene modules (see [example](https://github.com/YiqunW/MIMIR/blob/main/example_scripts/step5_Check_clustering_results.md)). To do this, we inspect several metrics for each clustering result, such as the number and size of clusters, the mean within-cluster gene correlation, and more. When manually curated modules (with a subset of genes) or additional gold-standard gene annotations are available, they can be used to assess the clustering results too.
 
