@@ -170,7 +170,7 @@ cluster_plots = plotClusters(noto.obj, cluster_use="STRING_ExpTxt+GO_noCC+Reacto
 *Full plot saved to `../example_results/cluster_plots1.pdf`*
 
 **Visualize cluster plots**
-```{r, fig.width = 10, fig.height = 12}
+```{r, fig.width = 20, fig.height = 24}
 library(patchwork)
 wrap_plots(cluster_plots[1:20], ncol = 4)
 wrap_plots(cluster_plots[21:40], ncol = 4)
@@ -196,7 +196,7 @@ head(noto.obj@gene.info)
 ```
 
 **Generate cluster plot**
-```{r, fig.width = 8, fig.height = 8}
+```{r, fig.width = 16, fig.height = 16}
 cluster_use="GO+Reactome+Interpro:OR:soft_cosine_sim;leiden_2_RBConfigurationVertex"
 cluster_plots = plotClusters(noto.obj, cluster_use=cluster_use, exp_use="smoothed.exp", save_pdf=F, 
                              save_width = 20, save_height = 40, return_plots=T, show_plot=F) 
@@ -225,7 +225,7 @@ head(noto.obj@gene.info)
 ```
 
 **Generate cluster plot**
-```{r, fig.width = 10, fig.height = 10}
+```{r, fig.width = 20, fig.height = 20}
 cluster_use="STRING_ExpTxt+GO_noCC+Reactome+Interpro:+:soft_cosine_sim;leiden_6_RBConfigurationVertex"
 cluster_plots = plotClusters(noto.obj, cluster_use=cluster_use, exp_use="smoothed.exp", save_pdf=F, 
                              save_width = 20, save_height = 40, return_plots=T, show_plot=F) 
